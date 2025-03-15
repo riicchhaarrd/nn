@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Enhanced Neural Network Curve Approximation with C Export</title>
+    <title>Enhanced Neural Network with PI and Golden Ratio Activations</title>
     <style>
         /* Container for side-by-side layout */
         #container {
@@ -144,6 +144,8 @@
                         <option value="swish">Swish</option>
                         <option value="smoothstep">Smoothstep</option>
                         <option value="cos">Cosine</option>
+                        <option value="pi">PI</option>
+                        <option value="golden">Golden Ratio</option>
                     </select>
                 </div>
 
@@ -228,6 +230,31 @@
             return dtResult * (1 / 8) * 2; // * 2 for the scaling we applied
         }
 
+        // PI-based activation function
+        function piFunc(x) {
+            // Use sin(x) modulated by a scaled PI value to create a unique pattern
+            return Math.sin(x) * Math.sin(Math.PI * x);
+        }
+
+        // Derivative of PI function
+        function piPrime(x) {
+            const pi = Math.PI;
+            return Math.cos(x) * Math.sin(pi * x) + Math.sin(x) * Math.cos(pi * x) * pi;
+        }
+
+        // Golden ratio activation function
+        function goldenFunc(x) {
+            const phi = (1 + Math.sqrt(5)) / 2; // ~1.618033988749895
+            return Math.tanh(x * phi) / phi;
+        }
+
+        // Derivative of golden ratio function
+        function goldenPrime(x) {
+            const phi = (1 + Math.sqrt(5)) / 2;
+            // Derivative of tanh(x*phi)/phi is (1 - tanh²(x*phi)) * phi / phi = (1 - tanh²(x*phi))
+            return (1 - Math.pow(Math.tanh(x * phi), 2));
+        }
+
         // Neural Network with one hidden layer
         class NeuralNetwork {
             constructor(inputSize, hiddenSize, outputSize, learningRate) {
@@ -279,6 +306,10 @@
                         return smoothstepFunc(x);
                     case "cos":
                         return Math.cos(x);
+                    case "pi":
+                        return piFunc(x);
+                    case "golden":
+                        return goldenFunc(x);
                     case "tanh":
                     default:
                         return Math.tanh(x);
@@ -302,6 +333,10 @@
                         return smoothstepPrime(x);
                     case "cos":
                         return -Math.sin(x);
+                    case "pi":
+                        return piPrime(x);
+                    case "golden":
+                        return goldenPrime(x);
                     case "tanh":
                     default:
                         return 1 - Math.tanh(x) * Math.tanh(x);
@@ -539,7 +574,23 @@
                     code += `    return result * 2.0 - 1.0;\n`;
                     code += `}\n\n`;
                     break;
-                // tanh is built into standard C math library, so no need to define it
+                case "pi":
+                    code += `// PI activation function (using precomputed value for efficiency)\n`;
+                    code += `${scalar_type} pi_activation(${scalar_type} x) {\n`;
+                    code += `    // Use constant for PI instead of expensive computation\n`;
+                    code += `    const ${scalar_type} PI = 3.14159265358979323846;\n`;
+                    code += `    return sin(x) * sin(PI * x);\n`;
+                    code += `}\n\n`;
+                    break;
+                case "golden":
+                    code += `// Golden ratio activation function (using precomputed value)\n`;
+                    code += `${scalar_type} golden_activation(${scalar_type} x) {\n`;
+                    code += `    // Use constant for golden ratio instead of sqrt calculation\n`;
+                    code += `    const ${scalar_type} PHI = 1.61803398874989484820;\n`;
+                    code += `    return tanh(x * PHI) / PHI;\n`;
+                    code += `}\n\n`;
+                    break;
+                // tanh and cos are built into standard C math library, so no need to define them
             }
 
             code += `${scalar_type} f(${scalar_type} x) {\n`;
@@ -564,6 +615,12 @@
                         break;
                     case "cos":
                         activationFunc = "cos";
+                        break;
+                    case "pi":
+                        activationFunc = "pi_activation";
+                        break;
+                    case "golden":
+                        activationFunc = "golden_activation";
                         break;
                     case "tanh":
                     default:
