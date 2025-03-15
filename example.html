@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGL2 Example</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="glCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById("glCanvas");
+        const gl = canvas.getContext("webgl2");
+
+        if (!gl) {
+            alert("WebGL2 not supported");
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const vertexShaderSource = `#version 300 es
+            in vec2 position;
+            void main() {
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+        `;
+
+        const fragmentShaderSource = `#version 300 es
+            precision mediump float;
+            out vec4 outColor;
+            uniform vec2 resolution;
+            uniform float time;
+
+            const int W[488] = int[488](345,144,136,338,133,416,227,-99,-11,-84,-23,234,-92,184,324,-10,-95,102,161,205,235,74,-2,214,89,277,250,147,-62,55,141,188,220,-30,39,284,303,205,189,183,122,-78,109,61,190,361,85,271,228,64,221,95,74,268,9,411,134,146,231,137,-3,88,3,71,74,-11,-13,234,48,52,146,148,10,186,257,-95,107,235,-48,89,-30,259,19,124,74,172,-40,277,-17,-63,202,321,113,-15,268,30,77,158,124,-122,-71,408,-75,257,270,112,139,79,-56,275,187,99,278,-7,97,167,58,49,180,141,160,57,338,170,73,253,142,100,213,156,293,205,120,-127,-4,161,330,297,46,65,234,185,85,106,155,39,216,57,49,67,-14,-40,198,190,34,117,146,212,119,115,120,193,161,41,275,73,119,186,48,36,148,170,264,-76,92,50,274,141,218,33,74,111,199,8,120,32,152,78,-40,74,18,240,274,184,150,182,91,180,137,86,63,139,147,34,88,19,98,294,36,165,44,22,234,251,203,192,215,83,51,143,167,115,86,243,180,105,161,162,53,83,114,168,129,116,82,91,217,240,180,142,16,152,111,56,198,178,162,177,172,97,199,219,87,103,110,26,40,179,41,119,132,242,149,74,264,34,194,205,57,-10,22,182,13,-24,94,40,141,137,156,95,178,128,90,175,221,78,152,102,176,143,112,126,196,98,233,109,153,155,127,155,180,67,133,253,79,201,229,-9,1,252,0,221,140,135,199,36,124,164,78,192,221,119,163,186,202,57,180,72,176,132,156,52,158,160,112,62,61,53,50,120,133,157,40,99,198,114,112,36,144,17,178,167,62,112,117,89,65,168,41,101,67,58,120,107,147,163,73,184,106,222,176,124,170,59,150,113,214,190,241,87,96,5,84,107,143,64,89,47,53,119,168,153,151,49,122,66,170,175,12,89,115,81,143,161,135,-20,107,154,87,42,68,94,230,130,51,113,16,133,22,15,141,171,24,-6,241,165,184,168,122,133,85,189,216,86,127,170,105,8,143,65,-16,207,13,53,223,197,81,-43,0,128,94,86,130,93,141,67,187,172,77,233,84,133,79,200,138,119,130,114,161,124,61,146,137,119,130,167,159,125,111,144,137,119,130,198,159,126,141,143);
+            const int B[67] = int[67](308,73,28,240,215,351,243,236,302,99,13,155,150,168,277,-38,-156,65,190,212,230,96,231,92,185,94,131,175,216,-114,90,164,59,144,157,80,132,177,138,219,63,108,134,115,156,135,108,129,114,143,110,108,106,134,121,120,129,125,100,128,111,128,125,142,118,118,118);
+            float Q(int x){return (float(x)/255.)*2.-1.;}
+            float A(float x){return sin(x);}
+            #define L(N,M,DST,SRC,SUM) for (int i=0;i<N;i++){SUM=Q(B[bi++]);for(int j=0;j<M;j++)SUM+=SRC[j]*Q(W[wi++]);DST[i]=A(SUM);}
+            vec3 f(vec2 x){float v[8];float nv[8];int wi=0;int bi=0;float sum;L(8,2,v,x,sum)for(int l=1;l<8;l++){L(8,8,nv,v,sum)for(int i=0;i<8;i++)v[i]=nv[i];}vec3 r;L(3,8,nv,v,r[i])return r;}
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / resolution.xy;
+                #define X (355./113.)
+                #define Y (1.5)
+                float x=mix(-X,X,uv.x);
+                float y=mix(-Y,Y,1.-uv.y);
+                float s=1.+1.*(sin(time)+1.);
+                vec3 color;
+                if(x*s>-X&&x*s<X&&y*s>-Y&&y*s<Y)
+                    color=f(vec2(x*s, y*s));
+                outColor=vec4(color, 1.0);
+            }
+        `;
+
+        function compileShader(source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const vertexShader = compileShader(vertexShaderSource, gl.VERTEX_SHADER);
+        const fragmentShader = compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            console.error(gl.getProgramInfoLog(program));
+        }
+        gl.useProgram(program);
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,
+            1, -1,
+            -1, 1,
+            -1, 1,
+            1, -1,
+            1, 1,
+        ]), gl.STATIC_DRAW);
+
+        const positionLocation = gl.getAttribLocation(program, "position");
+        gl.enableVertexAttribArray(positionLocation);
+        gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+        const resolutionLocation = gl.getUniformLocation(program, "resolution");
+        const timeLocation = gl.getUniformLocation(program, "time");
+
+        function render(time) {
+            time *= 0.001;
+            gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
+            gl.uniform1f(timeLocation, time);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(render);
+        }
+        render(0);
+    </script>
+</body>
+
+</html>
