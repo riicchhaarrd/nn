@@ -5,38 +5,66 @@
     <meta charset="UTF-8">
     <title>SGD Neural Network Curve Approximation with C Export</title>
     <style>
-        canvas {
-            border: 1px solid #333;
-            display: block;
-            margin: 20px auto;
+        /* Container for side-by-side layout */
+        #container {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 20px;
+            margin: 20px;
         }
 
+        /* Left panel for the canvas */
+        #left-panel {
+            /* The canvas retains its 600px width and 400px height */
+        }
+
+        /* Right panel for stats and export function */
+        #right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 300px;
+        }
+
+        /* Styling for stats and export containers */
         #stats,
         #export-container {
-            width: 600px;
-            margin: 0 auto;
+            width: 100%;
             font-family: monospace;
             white-space: pre-wrap;
             background: #f9f9f9;
             padding: 10px;
             border: 1px solid #ddd;
-            margin-bottom: 20px;
+            box-sizing: border-box;
         }
 
         #export {
             width: 100%;
-            height: 200px;
+            height: 430px;
             font-family: monospace;
+            box-sizing: border-box;
+        }
+
+        canvas {
+            border: 1px solid #333;
+            display: block;
         }
     </style>
 </head>
 
 <body>
-    <canvas id="canvas" width="600" height="400"></canvas>
-    <div id="stats"></div>
-    <div id="export-container">
-        <strong>Exported C Function:</strong>
-        <textarea id="export" readonly></textarea>
+    <div id="container">
+        <div id="left-panel">
+            <canvas id="canvas" width="600" height="400"></canvas>
+            <div id="export-container">
+                <strong>Exported C Function:</strong>
+                <textarea id="export" readonly></textarea>
+            </div>
+        </div>
+        <div id="right-panel">
+            <div id="stats"></div>
+        </div>
     </div>
     <script>
         // Neural Network with one hidden layer
@@ -130,7 +158,8 @@
 
         // Target function to approximate (sine curve)
         function targetFunction(x) {
-            return Math.sin(x);
+            // return Math.sin(x);
+            return x * x * (1 - x);
         }
 
         // Perform one training step using a random sample from the domain
@@ -198,9 +227,12 @@
         // Update the stats display with current weights and biases
         function updateStats() {
             const statsDiv = document.getElementById("stats");
-            let statsText = "Weights1 (input -> hidden):\n" + nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
-            statsText += "Bias1 (hidden):\n" + nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
-            statsText += "Weights2 (hidden -> output):\n" + nn.weights2.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
+            let statsText = "Weights1 (input -> hidden):\n" +
+                nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
+            statsText += "Bias1 (hidden):\n" +
+                nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
+            statsText += "Weights2 (hidden -> output):\n" +
+                nn.weights2.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
             statsText += "Bias2 (output): " + nn.bias2.toFixed(6);
             statsDiv.textContent = statsText;
         }
@@ -224,7 +256,6 @@
 
         // Animation loop: perform multiple training steps per frame, update drawing, stats, and export code
         function animate() {
-            // Run several training iterations per frame for faster convergence
             for (let i = 0; i < 100; i++) {
                 trainStep();
             }
