@@ -59,7 +59,8 @@
             border: 1px solid #ddd;
         }
 
-        select, label {
+        select,
+        label {
             font-family: sans-serif;
             margin-right: 10px;
         }
@@ -78,6 +79,7 @@
                     <option value="relu">ReLU</option>
                     <option value="leakyRelu">Leaky ReLU</option>
                     <option value="swish">Swish</option>
+                    <option value="smoothstep">Smoothstep</option>
                 </select>
             </div>
             <div id="export-container">
@@ -90,6 +92,55 @@
         </div>
     </div>
     <script>
+        // Helper functions for smoothstep
+        function mix(a, b, weightb) {
+            return (1 - weightb) * a + (weightb) * b;
+        }
+
+        function squared(x) {
+            return x * x;
+        }
+
+        function flip(x) {
+            return 1 - x;
+        }
+
+        function smoothstart(t) {
+            // Equivalent to t^2
+            return squared(t);
+        }
+
+        function smoothstop(t) {
+            // Equivalent to 1-(1-t)^2
+            return flip(squared(flip(t)));
+        }
+
+        function smoothstepFunc(x) {
+            // Normalize input to 0-1 range for smoothstep
+            // We'll use a range of -4 to 4 for the normalization
+            let t = (x + 4) / 8;
+            t = Math.max(0, Math.min(1, t)); // Clamp to [0,1]
+
+            // Apply smoothstep which is a mix of smoothstart and smoothstop
+            let result = mix(smoothstart(t), smoothstop(t), t);
+
+            // Scale result to be in similar range as tanh (-1 to 1)
+            return result * 2 - 1;
+        }
+
+        // Derivative of smoothstep function
+        function smoothstepPrime(x) {
+            // Normalize input to 0-1 range for smoothstep
+            let t = (x + 4) / 8;
+            if (t <= 0 || t >= 1) return 0; // Derivative is 0 outside [0,1]
+
+            // Derivative of smoothstep in t-space
+            let dtResult = 6 * t * (1 - t);
+
+            // Chain rule: multiply by derivative of normalization (1/8)
+            return dtResult * (1 / 8) * 2; // * 2 for the scaling we applied
+        }
+
         // Neural Network with one hidden layer
         class NeuralNetwork {
             constructor(inputSize, hiddenSize, outputSize, learningRate) {
@@ -127,6 +178,8 @@
                         return x > 0 ? x : 0.01 * x;
                     case "swish":
                         return x * (1 / (1 + Math.exp(-x)));
+                    case "smoothstep":
+                        return smoothstepFunc(x);
                     case "tanh":
                     default:
                         return Math.tanh(x);
@@ -146,6 +199,8 @@
                     case "swish":
                         let sigm = 1 / (1 + Math.exp(-x));
                         return sigm + x * sigm * (1 - sigm);
+                    case "smoothstep":
+                        return smoothstepPrime(x);
                     case "tanh":
                     default:
                         return 1 - Math.tanh(x) * Math.tanh(x);
@@ -301,29 +356,46 @@
         // Generate and update the export textarea with a C function
         function updateExport() {
             const exportArea = document.getElementById("export");
-            let code = "double neural_net(double x) {\n";
-            
+            let code = "";
             // Add appropriate activation function implementation based on current selection
             switch (nn.activationFunction) {
                 case "sigmoid":
-                    code += "    // Helper sigmoid function\n";
-                    code += "    double sigmoid(double x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
+                    code += "// Helper sigmoid function\n";
+                    code += "double sigmoid(double x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
                     break;
                 case "relu":
-                    code += "    // Helper ReLU function\n";
-                    code += "    double relu(double x) { return x > 0 ? x : 0; }\n\n";
+                    code += "// Helper ReLU function\n";
+                    code += "double relu(double x) { return x > 0 ? x : 0; }\n\n";
                     break;
                 case "leakyRelu":
-                    code += "    // Helper Leaky ReLU function\n";
-                    code += "    double leaky_relu(double x) { return x > 0 ? x : 0.01 * x; }\n\n";
+                    code += "// Helper Leaky ReLU function\n";
+                    code += "double leaky_relu(double x) { return x > 0 ? x : 0.01 * x; }\n\n";
                     break;
                 case "swish":
-                    code += "    // Helper Swish function\n";
-                    code += "    double swish(double x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+                    code += "// Helper Swish function\n";
+                    code += "double swish(double x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+                    break;
+                case "smoothstep":
+                    // code += "// Helper functions for smoothstep\n";
+                    // code += "double mix(double a, double b, double weightb) { return (1.0 - weightb) * a + weightb * b; }\n";
+                    // code += "double squared(double x) { return x * x; }\n";
+                    // code += "double flip(double x) { return 1.0 - x; }\n";
+                    // code += "double smoothstart(double t) { return squared(t); }\n";
+                    // code += "double smoothstop(double t) { return flip(squared(flip(t))); }\n";
+                    // code += "double smoothstep(double x) {\n";
+                    // code += "    // Normalize to 0-1 range\n";
+                    // code += "    double t = (x + 4.0) / 8.0;\n";
+                    // code += "    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n";
+                    // code += "    // Apply smoothstep\n";
+                    // code += "    double result = mix(smoothstart(t), smoothstop(t), t);\n";
+                    // code += "    // Scale to similar range as tanh\n";
+                    // code += "    return result * 2.0 - 1.0;\n";
+                    // code += "}\n\n";
                     break;
                 // tanh is built into standard C math library, so no need to define it
             }
-            
+
+            code += "double neural_net(double x) {\n";
             // Compute each hidden neuron output using the selected activation function
             for (let i = 0; i < nn.hiddenSize; i++) {
                 let activationFunc = "";
@@ -340,13 +412,16 @@
                     case "swish":
                         activationFunc = "swish";
                         break;
+                    case "smoothstep":
+                        activationFunc = "smoothstep";
+                        break;
                     case "tanh":
                     default:
                         activationFunc = "tanh";
                 }
                 code += `    double a${i} = ${activationFunc}(x * ${nn.weights1[i].toFixed(6)} + ${nn.bias1[i].toFixed(6)});\n`;
             }
-            
+
             code += "    double output = " + nn.bias2.toFixed(6) + ";\n";
             for (let i = 0; i < nn.hiddenSize; i++) {
                 code += "    output += " + nn.weights2[i].toFixed(6) + " * a" + i + ";\n";
@@ -357,7 +432,7 @@
         }
 
         // Set up activation function selection event listener
-        document.getElementById("activation-function").addEventListener("change", function() {
+        document.getElementById("activation-function").addEventListener("change", function () {
             nn.setActivationFunction(this.value);
         });
 
