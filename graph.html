@@ -1,220 +1,191 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <meta charset="utf-8">
-  <title>Neural Network Curve Approximation using SGD</title>
-  <style>
-    canvas {
-      border: 1px solid black;
-      display: block;
-      margin: 20px auto;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>SGD Neural Network Curve Approximation</title>
+    <style>
+        canvas {
+            border: 1px solid #333;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
 </head>
+
 <body>
-<canvas id="canvas" width="600" height="400"></canvas>
-<script>
-  // A simple neural network with 1 input, 10 hidden nodes, and 1 output.
-  function NeuralNetwork(inputNodes, hiddenNodes, outputNodes, learningRate) {
-    this.inputNodes = inputNodes;
-    this.hiddenNodes = hiddenNodes;
-    this.outputNodes = outputNodes;
-    this.learningRate = learningRate || 0.1;
+    <canvas id="canvas" width="600" height="400"></canvas>
+    <script>
+        // Neural Network with one hidden layer
+        class NeuralNetwork {
+            constructor(inputSize, hiddenSize, outputSize, learningRate) {
+                this.inputSize = inputSize;
+                this.hiddenSize = hiddenSize;
+                this.outputSize = outputSize;
+                this.learningRate = learningRate;
 
-    // Initialize weights for input-to-hidden and hidden-to-output layers.
-    this.weights_ih = new Array(this.hiddenNodes)
-      .fill(0)
-      .map(() => new Array(this.inputNodes)
-        .fill(0)
-        .map(() => Math.random() * 2 - 1));
-    this.weights_ho = new Array(this.outputNodes)
-      .fill(0)
-      .map(() => new Array(this.hiddenNodes)
-        .fill(0)
-        .map(() => Math.random() * 2 - 1));
+                // Initialize weights and biases randomly between -1 and 1
+                this.weights1 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.bias1 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.weights2 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.bias2 = Math.random() * 2 - 1;
+            }
 
-    // Biases for hidden and output layers.
-    this.bias_h = new Array(this.hiddenNodes)
-      .fill(0)
-      .map(() => Math.random() * 2 - 1);
-    this.bias_o = new Array(this.outputNodes)
-      .fill(0)
-      .map(() => Math.random() * 2 - 1);
+            // Activation function (tanh) and its derivative
+            tanh(x) {
+                return Math.tanh(x);
+            }
 
-    // Sigmoid activation function and its derivative.
-    this.sigmoid = function(x) {
-      return 1 / (1 + Math.exp(-x));
-    }
-    this.dsigmoid = function(y) {
-      return y * (1 - y);
-    }
+            dtanh(x) {
+                // Derivative of tanh: 1 - tanh(x)^2
+                return 1 - Math.tanh(x) * Math.tanh(x);
+            }
 
-    // Feedforward prediction.
-    this.predict = function(input_array) {
-      // Compute hidden layer outputs.
-      let hidden = [];
-      for (let i = 0; i < this.hiddenNodes; i++) {
-        let sum = 0;
-        for (let j = 0; j < this.inputNodes; j++) {
-          sum += this.weights_ih[i][j] * input_array[j];
+            // Forward pass: Given input x, compute the network output.
+            forward(x) {
+                this.a = []; // Pre-activation values for hidden neurons
+                this.h = []; // Post-activation (tanh) values for hidden neurons
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    let a = x * this.weights1[i] + this.bias1[i];
+                    this.a[i] = a;
+                    this.h[i] = this.tanh(a);
+                }
+                // Output layer: linear combination of hidden outputs plus bias
+                let output = this.bias2;
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    output += this.weights2[i] * this.h[i];
+                }
+                return output;
+            }
+
+            // Single training step using SGD for one sample (x, target)
+            train(x, target) {
+                // Forward pass
+                let output = this.forward(x);
+                let error = output - target;  // error (for squared error loss)
+
+                // Backpropagate: update output layer weights and bias
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    let gradW2 = error * this.h[i];
+                    this.weights2[i] -= this.learningRate * gradW2;
+                }
+                this.bias2 -= this.learningRate * error;
+
+                // Backpropagate into the hidden layer
+                for (let i = 0; i < this.hiddenSize; i++) {
+                    let deltaHidden = error * this.weights2[i] * this.dtanh(this.a[i]);
+                    this.weights1[i] -= this.learningRate * deltaHidden * x;
+                    this.bias1[i] -= this.learningRate * deltaHidden;
+                }
+            }
         }
-        sum += this.bias_h[i];
-        hidden[i] = this.sigmoid(sum);
-      }
-      
-      // Compute output layer outputs.
-      let output = [];
-      for (let i = 0; i < this.outputNodes; i++) {
-        let sum = 0;
-        for (let j = 0; j < this.hiddenNodes; j++) {
-          sum += this.weights_ho[i][j] * hidden[j];
+
+        // Set up canvas and coordinate transforms
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+
+        // Define the domain for x and range for y.
+        // Here, we use x ∈ [–π, π] and y ∈ [–1.5, 1.5]
+        const xMin = -Math.PI;
+        const xMax = Math.PI;
+        const yMin = -1.5;
+        const yMax = 1.5;
+
+        function transformX(x) {
+            return (x - xMin) / (xMax - xMin) * width;
         }
-        sum += this.bias_o[i];
-        output[i] = this.sigmoid(sum);
-      }
-      return output;
-    }
 
-    // Train the network using SGD with one sample per update.
-    this.train = function(input_array, target_array) {
-      // --- Feedforward ---
-      let hidden = [];
-      for (let i = 0; i < this.hiddenNodes; i++) {
-        let sum = 0;
-        for (let j = 0; j < this.inputNodes; j++) {
-          sum += this.weights_ih[i][j] * input_array[j];
+        function transformY(y) {
+            // Flip y so that higher y-values appear at the top of the canvas
+            return height - ((y - yMin) / (yMax - yMin) * height);
         }
-        sum += this.bias_h[i];
-        hidden[i] = this.sigmoid(sum);
-      }
-      
-      let outputs = [];
-      for (let i = 0; i < this.outputNodes; i++) {
-        let sum = 0;
-        for (let j = 0; j < this.hiddenNodes; j++) {
-          sum += this.weights_ho[i][j] * hidden[j];
+
+        // Create the neural network (1 input, 10 hidden neurons, 1 output) with learning rate 0.01
+        const nn = new NeuralNetwork(1, 10, 1, 0.01);
+
+        // Target function to approximate (sine curve)
+        function targetFunction(x) {
+            //   return Math.sin(x);
+            return x * x * (1 - x);
         }
-        sum += this.bias_o[i];
-        outputs[i] = this.sigmoid(sum);
-      }
-      
-      // --- Backpropagation ---
-      // Calculate output errors.
-      let output_errors = [];
-      for (let i = 0; i < this.outputNodes; i++) {
-        output_errors[i] = target_array[i] - outputs[i];
-      }
-      
-      // Compute gradients for the output layer.
-      let gradients = [];
-      for (let i = 0; i < this.outputNodes; i++) {
-        gradients[i] = this.dsigmoid(outputs[i]) * output_errors[i] * this.learningRate;
-      }
-      
-      // Update weights and biases for hidden-to-output layer.
-      for (let i = 0; i < this.outputNodes; i++) {
-        for (let j = 0; j < this.hiddenNodes; j++) {
-          let delta = gradients[i] * hidden[j];
-          this.weights_ho[i][j] += delta;
+
+        // Perform one training step using a random sample from the domain
+        function trainStep() {
+            let x = Math.random() * (xMax - xMin) + xMin;
+            let y = targetFunction(x);
+            nn.train(x, y);
         }
-        this.bias_o[i] += gradients[i];
-      }
-      
-      // Calculate hidden layer errors.
-      let hidden_errors = new Array(this.hiddenNodes).fill(0);
-      for (let i = 0; i < this.outputNodes; i++) {
-        for (let j = 0; j < this.hiddenNodes; j++) {
-          hidden_errors[j] += this.weights_ho[i][j] * output_errors[i];
+
+        // Draw the true sine function and the neural network's approximation
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw axes
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            // X-axis
+            ctx.moveTo(0, transformY(0));
+            ctx.lineTo(width, transformY(0));
+            // Y-axis
+            ctx.moveTo(transformX(0), 0);
+            ctx.lineTo(transformX(0), height);
+            ctx.stroke();
+
+            // Draw the true sine curve (blue)
+            ctx.strokeStyle = "blue";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            let firstPoint = true;
+            for (let i = 0; i <= width; i++) {
+                let xVal = xMin + (i / width) * (xMax - xMin);
+                let yVal = targetFunction(xVal);
+                let canvasX = transformX(xVal);
+                let canvasY = transformY(yVal);
+                if (firstPoint) {
+                    ctx.moveTo(canvasX, canvasY);
+                    firstPoint = false;
+                } else {
+                    ctx.lineTo(canvasX, canvasY);
+                }
+            }
+            ctx.stroke();
+
+            // Draw the neural network's approximation (red)
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            firstPoint = true;
+            for (let i = 0; i <= width; i++) {
+                let xVal = xMin + (i / width) * (xMax - xMin);
+                let yVal = nn.forward(xVal);
+                let canvasX = transformX(xVal);
+                let canvasY = transformY(yVal);
+                if (firstPoint) {
+                    ctx.moveTo(canvasX, canvasY);
+                    firstPoint = false;
+                } else {
+                    ctx.lineTo(canvasX, canvasY);
+                }
+            }
+            ctx.stroke();
         }
-      }
-      
-      // Compute gradients for the hidden layer.
-      let hidden_gradients = [];
-      for (let i = 0; i < this.hiddenNodes; i++) {
-        hidden_gradients[i] = this.dsigmoid(hidden[i]) * hidden_errors[i] * this.learningRate;
-      }
-      
-      // Update weights and biases for input-to-hidden layer.
-      for (let i = 0; i < this.hiddenNodes; i++) {
-        for (let j = 0; j < this.inputNodes; j++) {
-          let delta = hidden_gradients[i] * input_array[j];
-          this.weights_ih[i][j] += delta;
+
+        // Animation loop: perform multiple training steps per frame and update the drawing
+        function animate() {
+            // Run several training iterations per frame for faster convergence
+            for (let i = 0; i < 100; i++) {
+                trainStep();
+            }
+            draw();
+            requestAnimationFrame(animate);
         }
-        this.bias_h[i] += hidden_gradients[i];
-      }
-    }
-  }
 
-  // Set up the canvas and context.
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-
-  // Create an instance of the neural network.
-  const nn = new NeuralNetwork(1, 10, 1, 0.1);
-
-  // Generate training data for approximating the sine function.
-  const trainingData = [];
-  for (let i = 0; i < 1000; i++) {
-    let x = Math.random() * Math.PI * 2;
-    let y = (Math.sin(x) + 1) / 2; // Normalize sine output to [0,1]
-    trainingData.push({
-      input: [x / (Math.PI * 2)], // Normalize x to [0,1]
-      output: [y]
-    });
-  }
-
-  // Perform one SGD training step by randomly selecting a single training sample.
-  function trainStep() {
-    const sample = trainingData[Math.floor(Math.random() * trainingData.length)];
-    nn.train(sample.input, sample.output);
-  }
-
-  // Draw the target sine curve (red) and the neural network's approximation (blue).
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw the target sine curve.
-    ctx.beginPath();
-    ctx.strokeStyle = 'red';
-    for (let i = 0; i <= canvas.width; i++) {
-      const x = i / canvas.width * Math.PI * 2;
-      const y = (Math.sin(x) + 1) / 2;
-      const canvasY = canvas.height - y * canvas.height;
-      if (i === 0) {
-        ctx.moveTo(i, canvasY);
-      } else {
-        ctx.lineTo(i, canvasY);
-      }
-    }
-    ctx.stroke();
-
-    // Draw the neural network's current approximation.
-    ctx.beginPath();
-    ctx.strokeStyle = 'blue';
-    for (let i = 0; i <= canvas.width; i++) {
-      const x_norm = i / canvas.width;
-      const y_norm = nn.predict([x_norm])[0];
-      const canvasY = canvas.height - y_norm * canvas.height;
-      if (i === 0) {
-        ctx.moveTo(i, canvasY);
-      } else {
-        ctx.lineTo(i, canvasY);
-      }
-    }
-    ctx.stroke();
-  }
-
-  // Main loop: perform multiple SGD training steps and update the drawing.
-  function loop() {
-    for (let i = 0; i < 10; i++) {
-      trainStep();
-    }
-    draw();
-    requestAnimationFrame(loop);
-  }
-
-  // Start the training and visualization loop.
-  loop();
-</script>
+        // Start the animation loop
+        animate();
+    </script>
 </body>
+
 </html>
