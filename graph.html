@@ -50,6 +50,19 @@
             border: 1px solid #333;
             display: block;
         }
+
+        /* Styling for control panel */
+        #control-panel {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+        }
+
+        select, label {
+            font-family: sans-serif;
+            margin-right: 10px;
+        }
     </style>
 </head>
 
@@ -57,6 +70,16 @@
     <div id="container">
         <div id="left-panel">
             <canvas id="canvas" width="600" height="400"></canvas>
+            <div id="control-panel">
+                <label for="activation-function">Activation Function:</label>
+                <select id="activation-function">
+                    <option value="tanh">Tanh</option>
+                    <option value="sigmoid">Sigmoid</option>
+                    <option value="relu">ReLU</option>
+                    <option value="leakyRelu">Leaky ReLU</option>
+                    <option value="swish">Swish</option>
+                </select>
+            </div>
             <div id="export-container">
                 <strong>Exported C Function:</strong>
                 <textarea id="export" readonly></textarea>
@@ -74,6 +97,7 @@
                 this.hiddenSize = hiddenSize;
                 this.outputSize = outputSize;
                 this.learningRate = learningRate;
+                this.activationFunction = "tanh"; // default activation function
 
                 // Initialize weights and biases randomly between -1 and 1
                 this.weights1 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
@@ -82,24 +106,60 @@
                 this.bias2 = Math.random() * 2 - 1;
             }
 
-            // Activation function (tanh) and its derivative
-            tanh(x) {
-                return Math.tanh(x);
+            // Set the activation function
+            setActivationFunction(funcName) {
+                this.activationFunction = funcName;
+                // Reset weights and biases when changing activation function
+                this.weights1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.bias1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.weights2 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.bias2 = Math.random() * 2 - 1;
             }
 
-            dtanh(x) {
-                // Derivative of tanh: 1 - tanh(x)^2
-                return 1 - Math.tanh(x) * Math.tanh(x);
+            // Activation functions
+            activate(x) {
+                switch (this.activationFunction) {
+                    case "sigmoid":
+                        return 1 / (1 + Math.exp(-x));
+                    case "relu":
+                        return Math.max(0, x);
+                    case "leakyRelu":
+                        return x > 0 ? x : 0.01 * x;
+                    case "swish":
+                        return x * (1 / (1 + Math.exp(-x)));
+                    case "tanh":
+                    default:
+                        return Math.tanh(x);
+                }
+            }
+
+            // Derivatives of activation functions
+            activatePrime(x) {
+                switch (this.activationFunction) {
+                    case "sigmoid":
+                        let sig = 1 / (1 + Math.exp(-x));
+                        return sig * (1 - sig);
+                    case "relu":
+                        return x > 0 ? 1 : 0;
+                    case "leakyRelu":
+                        return x > 0 ? 1 : 0.01;
+                    case "swish":
+                        let sigm = 1 / (1 + Math.exp(-x));
+                        return sigm + x * sigm * (1 - sigm);
+                    case "tanh":
+                    default:
+                        return 1 - Math.tanh(x) * Math.tanh(x);
+                }
             }
 
             // Forward pass: Given input x, compute the network output.
             forward(x) {
                 this.a = []; // Pre-activation values for hidden neurons
-                this.h = []; // Post-activation (tanh) values for hidden neurons
+                this.h = []; // Post-activation values for hidden neurons
                 for (let i = 0; i < this.hiddenSize; i++) {
                     let a = x * this.weights1[i] + this.bias1[i];
                     this.a[i] = a;
-                    this.h[i] = this.tanh(a);
+                    this.h[i] = this.activate(a);
                 }
                 // Output layer: linear combination of hidden outputs plus bias
                 let output = this.bias2;
@@ -124,7 +184,7 @@
 
                 // Backpropagate into the hidden layer
                 for (let i = 0; i < this.hiddenSize; i++) {
-                    let deltaHidden = error * this.weights2[i] * this.dtanh(this.a[i]);
+                    let deltaHidden = error * this.weights2[i] * this.activatePrime(this.a[i]);
                     this.weights1[i] -= this.learningRate * deltaHidden * x;
                     this.bias1[i] -= this.learningRate * deltaHidden;
                 }
@@ -227,7 +287,8 @@
         // Update the stats display with current weights and biases
         function updateStats() {
             const statsDiv = document.getElementById("stats");
-            let statsText = "Weights1 (input -> hidden):\n" +
+            let statsText = "Activation Function: " + nn.activationFunction + "\n\n";
+            statsText += "Weights1 (input -> hidden):\n" +
                 nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
             statsText += "Bias1 (hidden):\n" +
                 nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
@@ -241,10 +302,51 @@
         function updateExport() {
             const exportArea = document.getElementById("export");
             let code = "double neural_net(double x) {\n";
-            // Compute each hidden neuron output using tanh
-            for (let i = 0; i < nn.hiddenSize; i++) {
-                code += "    double a" + i + " = tanh(x * " + nn.weights1[i].toFixed(6) + " + " + nn.bias1[i].toFixed(6) + ");\n";
+            
+            // Add appropriate activation function implementation based on current selection
+            switch (nn.activationFunction) {
+                case "sigmoid":
+                    code += "    // Helper sigmoid function\n";
+                    code += "    double sigmoid(double x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
+                    break;
+                case "relu":
+                    code += "    // Helper ReLU function\n";
+                    code += "    double relu(double x) { return x > 0 ? x : 0; }\n\n";
+                    break;
+                case "leakyRelu":
+                    code += "    // Helper Leaky ReLU function\n";
+                    code += "    double leaky_relu(double x) { return x > 0 ? x : 0.01 * x; }\n\n";
+                    break;
+                case "swish":
+                    code += "    // Helper Swish function\n";
+                    code += "    double swish(double x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+                    break;
+                // tanh is built into standard C math library, so no need to define it
             }
+            
+            // Compute each hidden neuron output using the selected activation function
+            for (let i = 0; i < nn.hiddenSize; i++) {
+                let activationFunc = "";
+                switch (nn.activationFunction) {
+                    case "sigmoid":
+                        activationFunc = "sigmoid";
+                        break;
+                    case "relu":
+                        activationFunc = "relu";
+                        break;
+                    case "leakyRelu":
+                        activationFunc = "leaky_relu";
+                        break;
+                    case "swish":
+                        activationFunc = "swish";
+                        break;
+                    case "tanh":
+                    default:
+                        activationFunc = "tanh";
+                }
+                code += `    double a${i} = ${activationFunc}(x * ${nn.weights1[i].toFixed(6)} + ${nn.bias1[i].toFixed(6)});\n`;
+            }
+            
             code += "    double output = " + nn.bias2.toFixed(6) + ";\n";
             for (let i = 0; i < nn.hiddenSize; i++) {
                 code += "    output += " + nn.weights2[i].toFixed(6) + " * a" + i + ";\n";
@@ -253,6 +355,11 @@
             code += "}\n";
             exportArea.value = code;
         }
+
+        // Set up activation function selection event listener
+        document.getElementById("activation-function").addEventListener("change", function() {
+            nn.setActivationFunction(this.value);
+        });
 
         // Animation loop: perform multiple training steps per frame, update drawing, stats, and export code
         function animate() {
