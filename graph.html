@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Function Graph using Generator</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+      display: block;
+      margin: 20px auto;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="myCanvas" width="800" height="600"></canvas>
+  <script>
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Define margins for the chart area
+    const margin = { top: 50, right: 100, bottom: 50, left: 80 };
+    const chartWidth = canvas.width - margin.left - margin.right;
+    const chartHeight = canvas.height - margin.top - margin.bottom;
+
+    // Draw the x and y axes with tick marks and labels
+    function drawAxes() {
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      
+      // Draw Y-axis
+      ctx.beginPath();
+      ctx.moveTo(margin.left, margin.top);
+      ctx.lineTo(margin.left, canvas.height - margin.bottom);
+      ctx.stroke();
+
+      // Draw X-axis
+      ctx.beginPath();
+      ctx.moveTo(margin.left, canvas.height - margin.bottom);
+      ctx.lineTo(canvas.width - margin.right, canvas.height - margin.bottom);
+      ctx.stroke();
+
+      // X-axis ticks and labels
+      const xTicks = 10;
+      const xTickSpacing = chartWidth / xTicks;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      for (let i = 0; i <= xTicks; i++) {
+        let x = margin.left + i * xTickSpacing;
+        let y = canvas.height - margin.bottom;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 5);
+        ctx.stroke();
+        // Label x values scaled 0 to 100
+        ctx.fillText(Math.round(i * (100 / xTicks)), x, y + 8);
+      }
+
+      // Y-axis ticks and labels
+      const yTicks = 10;
+      const yTickSpacing = chartHeight / yTicks;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i <= yTicks; i++) {
+        let x = margin.left;
+        let y = margin.top + i * yTickSpacing;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 5, y);
+        ctx.stroke();
+        // Label y values (0 to 100, inverted)
+        ctx.fillText(Math.round(100 - i * (100 / yTicks)), x - 8, y);
+      }
+
+      // Axis labels
+      ctx.fillStyle = 'black';
+      ctx.font = '16px Arial';
+      ctx.fillText('X Axis', canvas.width / 2, canvas.height - margin.bottom + 30);
+      
+      // Y-axis label (rotated)
+      ctx.save();
+      ctx.translate(margin.left - 50, canvas.height / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('Y Axis', 0, 0);
+      ctx.restore();
+    }
+    let SEED = Math.random();
+    // Define the function f(x)
+    function f(x) {
+      // Example function: sine wave scaled to range roughly between 10 and 90
+      //return 50 + 40 * Math.sin(2 * Math.PI * x / 100);
+      let y = Math.sin(x * SEED) * 3;
+      SEED += y;
+      return y + 50;
+    }
+
+    // Generator that yields function points for f(x)
+    function* generateFunctionPoints(numPoints) {
+      for (let i = 0; i < numPoints; i++) {
+        // Scale x from 0 to 100
+        let x = i / (numPoints - 1) * 100;
+        yield { x: x, y: f(x) };
+      }
+    }
+
+    // Plot the function as a connected blue line using the generator
+    function drawFunctionGraph(generator, numPoints) {
+      ctx.beginPath();
+      let first = true;
+      let i = 0;
+      for (const point of generator) {
+        // Map the x coordinate from index to canvas coordinate
+        const canvasX = margin.left + (i / (numPoints - 1)) * chartWidth;
+        // Map y (in the range 0-100) to canvas coordinate (inverted)
+        const canvasY = margin.top + (1 - point.y / 100) * chartHeight;
+        if (first) {
+          ctx.moveTo(canvasX, canvasY);
+          first = false;
+        } else {
+          ctx.lineTo(canvasX, canvasY);
+        }
+        i++;
+      }
+      ctx.strokeStyle = 'blue';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Draw a simple legend on the canvas
+    function drawLegend() {
+      const legendX = canvas.width - margin.right + 10;
+      const legendY = margin.top;
+      const legendWidth = 80;
+      const legendHeight = 40;
+
+      // Draw legend box
+      ctx.strokeStyle = 'black';
+      ctx.strokeRect(legendX, legendY, legendWidth, legendHeight);
+
+      // Draw a sample line (matching the function's color)
+      ctx.beginPath();
+      ctx.moveTo(legendX + 10, legendY + legendHeight / 2);
+      ctx.lineTo(legendX + 30, legendY + legendHeight / 2);
+      ctx.strokeStyle = 'blue';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Add legend text
+      ctx.fillStyle = 'black';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('f(x)', legendX + 35, legendY + legendHeight / 2);
+    }
+
+    // Main function to draw the graph
+    function drawGraph() {
+      // Clear the canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      drawAxes();
+      const numPoints = 50;
+      const generator = generateFunctionPoints(numPoints);
+      drawFunctionGraph(generator, numPoints);
+      drawLegend();
+    }
+
+    // Draw the graph on load
+    drawGraph();
+  </script>
+</body>
+</html>
