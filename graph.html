@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>SGD Neural Network Curve Approximation with C Export</title>
+    <title>Enhanced Neural Network Curve Approximation with C Export</title>
     <style>
         /* Container for side-by-side layout */
         #container {
@@ -26,6 +26,11 @@
             gap: 20px;
             width: 300px;
         }
+        #right-panel2 {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
 
         /* Styling for stats and export containers */
         #stats,
@@ -38,10 +43,20 @@
             border: 1px solid #ddd;
             box-sizing: border-box;
         }
+        #export-container2 {
+            /* width: 100%; */
+            font-family: monospace;
+            /* white-space: pre-wrap; */
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
 
         #export {
-            width: 100%;
+            /* width: 100%; */
             height: 430px;
+            width:370px;
             font-family: monospace;
             box-sizing: border-box;
         }
@@ -59,10 +74,46 @@
             border: 1px solid #ddd;
         }
 
+        #network-controls {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        #function-controls {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+
         select,
+        input,
         label {
             font-family: sans-serif;
-            margin-right: 10px;
+        }
+
+        input[type="number"] {
+            width: 60px;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 5px 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #45a049;
         }
     </style>
 </head>
@@ -72,23 +123,59 @@
         <div id="left-panel">
             <canvas id="canvas" width="600" height="400"></canvas>
             <div id="control-panel">
-                <label for="activation-function">Activation Function:</label>
-                <select id="activation-function">
-                    <option value="tanh">Tanh</option>
-                    <option value="sigmoid">Sigmoid</option>
-                    <option value="relu">ReLU</option>
-                    <option value="leakyRelu">Leaky ReLU</option>
-                    <option value="swish">Swish</option>
-                    <option value="smoothstep">Smoothstep</option>
-                </select>
-            </div>
-            <div id="export-container">
-                <strong>Exported C Function:</strong>
-                <textarea id="export" readonly></textarea>
+                <div id="network-controls">
+                    <label for="hidden-size">Hidden Neurons:</label>
+                    <input type="number" id="hidden-size" min="1" max="50" value="10">
+
+                    <label for="learning-rate">Learning Rate:</label>
+                    <input type="number" id="learning-rate" min="0.0001" max="1" step="0.001" value="0.001">
+                    <!-- <input type="number" id="learning-rate" min="0.0001" max="1" step="0.001" value="0.01"> -->
+
+                    <label for="batch-size">Training Steps/Frame:</label>
+                    <input type="number" id="batch-size" min="1" max="1000" value="10000">
+                    <!-- <input type="number" id="batch-size" min="1" max="1000" value="100"> -->
+
+                    <label for="activation-function">Activation Function:</label>
+                    <select id="activation-function">
+                        <option value="tanh">Tanh</option>
+                        <option value="sigmoid">Sigmoid</option>
+                        <option value="relu">ReLU</option>
+                        <option value="leakyRelu">Leaky ReLU</option>
+                        <option value="swish">Swish</option>
+                        <option value="smoothstep">Smoothstep</option>
+                        <option value="cos">Cosine</option>
+                    </select>
+                </div>
+
+                <div id="function-controls">
+                    <label for="target-function">Target Function:</label>
+                    <select id="target-function">
+                        <option value="sine">Sine</option>
+                        <option value="polynomial">Polynomial</option>
+                        <option value="square">Square Wave</option>
+                        <option value="step">Step Function</option>
+                        <option value="custom">Custom</option>
+                    </select>
+
+                    <label for="custom-function" id="custom-function-label" style="display:none;">Custom Function:</label>
+                    <input type="text" id="custom-function" value="Math.sin(x)" style="display:none;">
+                </div>
+
+                <button id="reset-network">Reset Network</button>
+                <button id="pause-training">Pause Training</button>
             </div>
         </div>
         <div id="right-panel">
             <div id="stats"></div>
+        </div>
+        <div id="right-panel2">
+            <div id="export-container2">
+                <strong>Exported C Function:</strong>
+                <div>
+                    
+                <textarea id="export" readonly></textarea>
+            </div>
+            </div>
         </div>
     </div>
     <script>
@@ -150,21 +237,31 @@
                 this.learningRate = learningRate;
                 this.activationFunction = "tanh"; // default activation function
 
+                this.initializeWeights();
+            }
+
+            initializeWeights() {
                 // Initialize weights and biases randomly between -1 and 1
-                this.weights1 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
-                this.bias1 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
-                this.weights2 = new Array(hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.weights1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.bias1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
+                this.weights2 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
                 this.bias2 = Math.random() * 2 - 1;
             }
 
             // Set the activation function
             setActivationFunction(funcName) {
                 this.activationFunction = funcName;
-                // Reset weights and biases when changing activation function
-                this.weights1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
-                this.bias1 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
-                this.weights2 = new Array(this.hiddenSize).fill(0).map(() => Math.random() * 2 - 1);
-                this.bias2 = Math.random() * 2 - 1;
+            }
+
+            // Update learning rate
+            setLearningRate(rate) {
+                this.learningRate = rate;
+            }
+
+            // Update hidden layer size
+            setHiddenSize(size) {
+                this.hiddenSize = size;
+                this.initializeWeights();
             }
 
             // Activation functions
@@ -180,6 +277,8 @@
                         return x * (1 / (1 + Math.exp(-x)));
                     case "smoothstep":
                         return smoothstepFunc(x);
+                    case "cos":
+                        return Math.cos(x);
                     case "tanh":
                     default:
                         return Math.tanh(x);
@@ -201,6 +300,8 @@
                         return sigm + x * sigm * (1 - sigm);
                     case "smoothstep":
                         return smoothstepPrime(x);
+                    case "cos":
+                        return -Math.sin(x);
                     case "tanh":
                     default:
                         return 1 - Math.tanh(x) * Math.tanh(x);
@@ -268,23 +369,56 @@
             return height - ((y - yMin) / (yMax - yMin) * height);
         }
 
-        // Create the neural network (1 input, 10 hidden neurons, 1 output) with learning rate 0.01
-        const nn = new NeuralNetwork(1, 10, 1, 0.01);
+        // Get DOM elements for controls
+        const hiddenSizeInput = document.getElementById("hidden-size");
+        const learningRateInput = document.getElementById("learning-rate");
+        const batchSizeInput = document.getElementById("batch-size");
+        const activationSelect = document.getElementById("activation-function");
+        const targetFunctionSelect = document.getElementById("target-function");
+        const customFunctionInput = document.getElementById("custom-function");
+        const customFunctionLabel = document.getElementById("custom-function-label");
+        const resetButton = document.getElementById("reset-network");
+        const pauseButton = document.getElementById("pause-training");
 
-        // Target function to approximate (sine curve)
+        // Create the neural network (1 input, 10 hidden neurons, 1 output) with learning rate 0.01
+        let nn = new NeuralNetwork(1, parseInt(hiddenSizeInput.value), 1, parseFloat(learningRateInput.value));
+        let isTraining = true;
+        let batchSize = parseInt(batchSizeInput.value);
+        let currentTargetFunction = "sine";
+
+        // Target function selection
         function targetFunction(x) {
-            // return Math.sin(x);
-            return x * x * (1 - x);
+            switch (currentTargetFunction) {
+                case "polynomial":
+                    return x * x * (1 - x);
+                case "square":
+                    return Math.sin(x) > 0 ? 1 : -1;
+                case "step":
+                    return x > 0 ? 1 : -1;
+                case "custom":
+                    try {
+                        // Function constructor to evaluate custom function expressions
+                        return new Function('x', 'return ' + customFunctionInput.value)(x);
+                    } catch (e) {
+                        console.error("Error in custom function:", e);
+                        return Math.sin(x); // Fallback to sine
+                    }
+                case "sine":
+                default:
+                    return Math.sin(x);
+            }
         }
 
         // Perform one training step using a random sample from the domain
         function trainStep() {
+            if (!isTraining) return;
+            
             let x = Math.random() * (xMax - xMin) + xMin;
             let y = targetFunction(x);
             nn.train(x, y);
         }
 
-        // Draw the true sine function and the neural network's approximation
+        // Draw the true target function and the neural network's approximation
         function draw() {
             ctx.clearRect(0, 0, width, height);
 
@@ -300,7 +434,7 @@
             ctx.lineTo(transformX(0), height);
             ctx.stroke();
 
-            // Draw the true sine curve (blue)
+            // Draw the true target curve (blue)
             ctx.strokeStyle = "blue";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -337,12 +471,24 @@
                 }
             }
             ctx.stroke();
+
+            // Add legend
+            ctx.font = "12px Arial";
+            ctx.fillStyle = "blue";
+            ctx.fillText("Target Function", 10, 20);
+            ctx.fillStyle = "red";
+            ctx.fillText("Neural Network Output", 10, 40);
         }
 
         // Update the stats display with current weights and biases
         function updateStats() {
             const statsDiv = document.getElementById("stats");
-            let statsText = "Activation Function: " + nn.activationFunction + "\n\n";
+            let statsText = "Network Configuration:\n";
+            statsText += `Hidden Neurons: ${nn.hiddenSize}\n`;
+            statsText += `Learning Rate: ${nn.learningRate}\n`;
+            statsText += `Activation: ${nn.activationFunction}\n`;
+            statsText += `Target Function: ${currentTargetFunction}\n\n`;
+            
             statsText += "Weights1 (input -> hidden):\n" +
                 nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
             statsText += "Bias1 (hidden):\n" +
@@ -357,45 +503,46 @@
         function updateExport() {
             const exportArea = document.getElementById("export");
             let code = "";
+            let scalar_type = "float";
             // Add appropriate activation function implementation based on current selection
             switch (nn.activationFunction) {
                 case "sigmoid":
                     code += "// Helper sigmoid function\n";
-                    code += "double sigmoid(double x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
+                    code += `${scalar_type} sigmoid(${scalar_type} x) { return 1.0 / (1.0 + exp(-x)); }\n\n`;
                     break;
                 case "relu":
                     code += "// Helper ReLU function\n";
-                    code += "double relu(double x) { return x > 0 ? x : 0; }\n\n";
+                    code += `${scalar_type} relu(${scalar_type} x) { return x > 0 ? x : 0; }\n\n`;
                     break;
                 case "leakyRelu":
                     code += "// Helper Leaky ReLU function\n";
-                    code += "double leaky_relu(double x) { return x > 0 ? x : 0.01 * x; }\n\n";
+                    code += `${scalar_type} leaky_relu(${scalar_type} x) { return x > 0 ? x : 0.01 * x; }\n\n`;
                     break;
                 case "swish":
                     code += "// Helper Swish function\n";
-                    code += "double swish(double x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+                    code += `${scalar_type} swish(${scalar_type} x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n`;
                     break;
                 case "smoothstep":
-                    // code += "// Helper functions for smoothstep\n";
-                    // code += "double mix(double a, double b, double weightb) { return (1.0 - weightb) * a + weightb * b; }\n";
-                    // code += "double squared(double x) { return x * x; }\n";
-                    // code += "double flip(double x) { return 1.0 - x; }\n";
-                    // code += "double smoothstart(double t) { return squared(t); }\n";
-                    // code += "double smoothstop(double t) { return flip(squared(flip(t))); }\n";
-                    // code += "double smoothstep(double x) {\n";
-                    // code += "    // Normalize to 0-1 range\n";
-                    // code += "    double t = (x + 4.0) / 8.0;\n";
-                    // code += "    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n";
-                    // code += "    // Apply smoothstep\n";
-                    // code += "    double result = mix(smoothstart(t), smoothstop(t), t);\n";
-                    // code += "    // Scale to similar range as tanh\n";
-                    // code += "    return result * 2.0 - 1.0;\n";
-                    // code += "}\n\n";
+                    code += `// Helper functions for smoothstep\n`;
+                    code += `${scalar_type} mix(${scalar_type} a, ${scalar_type} b, ${scalar_type} weightb) { return (1.0 - weightb) * a + weightb * b; }\n`;
+                    code += `${scalar_type} squared(${scalar_type} x) { return x * x; }\n`;
+                    code += `${scalar_type} flip(${scalar_type} x) { return 1.0 - x; }\n`;
+                    code += `${scalar_type} smoothstart(${scalar_type} t) { return squared(t); }\n`;
+                    code += `${scalar_type} smoothstop(${scalar_type} t) { return flip(squared(flip(t))); }\n`;
+                    code += `${scalar_type} smoothstep_(${scalar_type} x) {\n`;
+                    code += `    // Normalize to 0-1 range\n`;
+                    code += `    ${scalar_type} t = (x + 4.0) / 8.0;\n`;
+                    code += `    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n`;
+                    code += `    // Apply smoothstep\n`;
+                    code += `    ${scalar_type} result = mix(smoothstart(t), smoothstop(t), t);\n`;
+                    code += `    // Scale to similar range as tanh\n`;
+                    code += `    return result * 2.0 - 1.0;\n`;
+                    code += `}\n\n`;
                     break;
                 // tanh is built into standard C math library, so no need to define it
             }
 
-            code += "double neural_net(double x) {\n";
+            code += `${scalar_type} f(${scalar_type} x) {\n`;
             // Compute each hidden neuron output using the selected activation function
             for (let i = 0; i < nn.hiddenSize; i++) {
                 let activationFunc = "";
@@ -413,32 +560,96 @@
                         activationFunc = "swish";
                         break;
                     case "smoothstep":
-                        activationFunc = "smoothstep";
+                        activationFunc = "smoothstep_";
+                        break;
+                    case "cos":
+                        activationFunc = "cos";
                         break;
                     case "tanh":
                     default:
                         activationFunc = "tanh";
                 }
-                code += `    double a${i} = ${activationFunc}(x * ${nn.weights1[i].toFixed(6)} + ${nn.bias1[i].toFixed(6)});\n`;
+                code += `    ${scalar_type} a${i} = ${activationFunc}(x * ${nn.weights1[i].toFixed(6)} + ${nn.bias1[i].toFixed(6)});\n`;
             }
 
-            code += "    double output = " + nn.bias2.toFixed(6) + ";\n";
+            code += `    ${scalar_type} y = ` + nn.bias2.toFixed(6) + `;\n`;
             for (let i = 0; i < nn.hiddenSize; i++) {
-                code += "    output += " + nn.weights2[i].toFixed(6) + " * a" + i + ";\n";
+                code += "    y += " + nn.weights2[i].toFixed(6) + " * a" + i + ";\n";
             }
-            code += "    return output;\n";
+            code += "    return y;\n";
             code += "}\n";
             exportArea.value = code;
         }
 
-        // Set up activation function selection event listener
-        document.getElementById("activation-function").addEventListener("change", function () {
+        // Set up event listeners for controls
+        activationSelect.addEventListener("change", function () {
             nn.setActivationFunction(this.value);
+        });
+
+        targetFunctionSelect.addEventListener("change", function () {
+            currentTargetFunction = this.value;
+            if (this.value === "custom") {
+                customFunctionInput.style.display = "inline-block";
+                customFunctionLabel.style.display = "inline-block";
+            } else {
+                customFunctionInput.style.display = "none";
+                customFunctionLabel.style.display = "none";
+            }
+        });
+
+        customFunctionInput.addEventListener("change", function () {
+            // Validate the custom function
+            try {
+                let testFunc = new Function('x', 'return ' + this.value);
+                testFunc(0); // Try evaluating at x=0
+            } catch (e) {
+                alert("Invalid function expression. Please check your syntax.");
+                this.value = "Math.sin(x)"; // Reset to a valid expression
+            }
+        });
+
+        hiddenSizeInput.addEventListener("change", function () {
+            const size = parseInt(this.value);
+            if (size > 0) {
+                nn.setHiddenSize(size);
+            } else {
+                this.value = "1";
+                nn.setHiddenSize(1);
+            }
+        });
+
+        learningRateInput.addEventListener("change", function () {
+            const rate = parseFloat(this.value);
+            if (rate > 0) {
+                nn.setLearningRate(rate);
+            } else {
+                this.value = "0.01";
+                nn.setLearningRate(0.01);
+            }
+        });
+
+        batchSizeInput.addEventListener("change", function () {
+            const size = parseInt(this.value);
+            if (size > 0) {
+                batchSize = size;
+            } else {
+                this.value = "100";
+                batchSize = 100;
+            }
+        });
+
+        resetButton.addEventListener("click", function () {
+            nn.initializeWeights();
+        });
+
+        pauseButton.addEventListener("click", function () {
+            isTraining = !isTraining;
+            this.textContent = isTraining ? "Pause Training" : "Resume Training";
         });
 
         // Animation loop: perform multiple training steps per frame, update drawing, stats, and export code
         function animate() {
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < batchSize; i++) {
                 trainStep();
             }
             draw();
