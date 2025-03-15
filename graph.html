@@ -136,34 +136,42 @@
       <div id="control-panel">
         <div id="network-controls">
           <!-- New controls for vector dimensions -->
-          <label for="input-dim">Input Dim:</label>
-          <input type="number" id="input-dim" min="1" max="10" value="1">
-          <label for="output-dim">Output Dim:</label>
-          <input type="number" id="output-dim" min="1" max="10" value="1">
 
+          <div style="visibility: hidden;display:none;">
+            <label for="input-dim">Input Dim:</label>
+            <input type="number" id="input-dim" min="1" max="10" value="2">
+            <label for="output-dim">Output Dim:</label>
+            <input type="number" id="output-dim" min="1" max="10" value="3">
+          </div>
           <label for="hidden-size">Hidden Neurons:</label>
-          <input type="number" id="hidden-size" min="1" max="50" value="10">
+          <input type="number" id="hidden-size" min="1" max="50" value="20">
 
           <label for="num-layers">Hidden Layers:</label>
-          <input type="number" id="num-layers" min="1" max="10" value="1">
+          <input type="number" id="num-layers" min="1" max="10" value="4">
 
-          <label for="learning-rate">Learning Rate:</label>
-          <input type="number" id="learning-rate" min="0.0001" max="1" step="0.001" value="0.001">
+          <div style="visibility: hidden;display:none;">
 
+            <label for="learning-rate">Learning Rate:</label>
+            <input type="number" id="learning-rate" min="0.0001" max="1" step="0.001" value="0.001">
+
+          </div>
+          <label for="resolution-input">Preview resolution:</label>
+          <input type="number" id="resolution-input" min="1" value="64">
           <label for="batch-size">Training Steps/Frame:</label>
           <input type="number" id="batch-size" min="1" max="1000" value="10000">
 
           <label for="activation-function">Activation Function:</label>
           <select id="activation-function">
+            <option value="cos">Cosine</option>
             <option value="tanh">Tanh</option>
             <option value="sigmoid">Sigmoid</option>
             <option value="relu">ReLU</option>
             <option value="leakyRelu">Leaky ReLU</option>
             <option value="swish">Swish</option>
             <option value="smoothstep">Smoothstep</option>
-            <option value="cos">Cosine</option>
             <option value="sin">Sine</option>
             <option value="sin30">Sine Omega 30 (SIREN)</option>
+            <option value="mulx">x*(1.-x)*(1.-x)</option>
             <!-- https://arxiv.org/abs/2006.09661 -->
             <option value="gelu">GELU</option>
             <option value="elu">ELU</option>
@@ -177,12 +185,12 @@
         <div id="function-controls">
           <label for="target-function">Target Function:</label>
           <select id="target-function">
-            <option value="sine">Sine</option>
-            <option value="polynomial">Polynomial</option>
-            <option value="square">Square Wave</option>
-            <option value="step">Step Function</option>
-            <option value="custom">Custom</option>
             <option value="image">Image</option>
+            <!-- <option value="sine">Sine</option>
+                        <option value="polynomial">Polynomial</option>
+                        <option value="square">Square Wave</option>
+                        <option value="step">Step Function</option>
+                        <option value="custom">Custom</option> -->
           </select>
 
           <label for="custom-function" id="custom-function-label" style="display:none;">Custom
@@ -191,7 +199,8 @@
         </div>
 
         <button id="reset-network">Reset Network</button>
-        <button id="pause-training">Pause Training</button>
+        <!-- <button id="pause-training">Pause Training</button> -->
+        <button id="pause-training">Resume Training</button>
       </div>
 
       <!-- Add image upload container -->
@@ -200,8 +209,8 @@
         <input type="file" id="image-upload" accept="image/*">
         <div>
           <label for="image-scale">Image scale:</label>
-          <input type="range" id="image-scale" min="0.1" max="1.0" step="0.1" value="0.5">
-          <span id="scale-value">0.5</span>
+          <input type="range" id="image-scale" min="0.1" max="1.0" step="0.1" value="1.0">
+          <span id="scale-value">1.0</span>
         </div>
         <canvas id="preview-canvas" width="200" height="200"></canvas>
         <button id="use-image">Use This Image</button>
@@ -306,7 +315,7 @@
         this.numHiddenLayers = numHiddenLayers;
         this.outputSize = outputSize;
         this.learningRate = learningRate;
-        this.activationFunction = "tanh"; // default activation
+        this.activationFunction = "cos"; // default activation
         this.initializeWeights();
       }
 
@@ -363,6 +372,7 @@
           case "cos": return Math.cos(x);
           case "sin": return Math.sin(x);
           case "sin30": return Math.sin(0.5236 * x);
+          case "mulx": return x * (1. - x) * (1. - x);
           case "gelu": return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
           case "elu": return x >= 0 ? x : (Math.exp(x) - 1);
           case "softplus": return Math.log(1 + Math.exp(x));
@@ -372,6 +382,25 @@
           case "tanh":
           default: return Math.tanh(x);
         }
+      }
+
+      toFlatArray() {
+        let flat = [];
+        // Serialize hidden layers
+        for (let l = 0; l < this.numHiddenLayers; l++) {
+          // Flatten weights for current layer
+          for (let i = 0; i < this.hiddenSize; i++) {
+            flat.push(...this.weights[l][i]);
+          }
+          // Flatten biases for current layer
+          flat.push(...this.biases[l]);
+        }
+        // Serialize output layer
+        for (let i = 0; i < this.outputSize; i++) {
+          flat.push(...this.outputWeights[i]);
+        }
+        flat.push(...this.outputBias);
+        return flat;
       }
 
       activatePrime(x) {
@@ -390,6 +419,7 @@
           case "cos": return -Math.sin(x);
           case "sin": return Math.cos(x);
           case "sin30": return 0.5236 * Math.cos(0.5236 * x);
+          case "mulx": return (1. - x) * (1. - 3. * x);
           case "gelu": {
             const k = Math.sqrt(2 / Math.PI);
             const tanhTerm = Math.tanh(k * (x + 0.044715 * Math.pow(x, 3)));
@@ -500,6 +530,10 @@
     const ctx = canvas.getContext("2d");
     const width = canvas.width, height = canvas.height;
     const xMin = -Math.PI, xMax = Math.PI, yMin = -1.5, yMax = 1.5;
+    // const xMin = -Math.PI, xMax = Math.PI, yMin = -Math.PI, yMax = Math.PI;
+    // const xMin = -Math.PI * 2, xMax = Math.PI * 2, yMin = -Math.PI * 2, yMax = Math.PI * 2;
+    // const xMin = -1.5, xMax = 1.5, yMin = -Math.PI * 1.01, yMax = Math.PI * 1.01;
+    // const xMin = -1.5, xMax = 1.5, yMin = -Math.PI, yMax = Math.PI; // cos
     function transformX(x) { return (x - xMin) / (xMax - xMin) * width; }
     function transformY(y) { return height - ((y - yMin) / (yMax - yMin) * height); }
 
@@ -516,6 +550,7 @@
     const customFunctionLabel = document.getElementById("custom-function-label");
     const resetButton = document.getElementById("reset-network");
     const pauseButton = document.getElementById("pause-training");
+    const resolutionInput = document.getElementById("resolution-input");
 
     // Create network using vector support for input/output dimensions.
     let nn = new NeuralNetwork(
@@ -525,16 +560,34 @@
       parseInt(outputDimInput.value),
       parseFloat(learningRateInput.value)
     );
-    let isTraining = true;
+    let isTraining = false;
     let batchSize = parseInt(batchSizeInput.value);
-    let currentTargetFunction = "sine";
+    let currentTargetFunction = "image";
     let imageData = null;
+    function customListFunction(x, list) {
+      if (!Array.isArray(list) || list.length === 0) {
+        console.error("Provided list is not valid.");
+        return 0;
+      }
+      // Clamp x to the range [0, list.length - 1]
+      if (x <= 0) return list[0];
+      if (x >= list.length - 1) return list[list.length - 1];
+
+      // Get the lower index and the fractional part
+      const index = Math.floor(x);
+      const t = x - index;
+      // Linear interpolation: (1-t)*value at lower index + t*value at next index
+      return list[index] * (1 - t) + list[index + 1] * t;
+    }
     // Target function: for output dim 1 use a scalar; if >1, cycle through input values.
     function targetFunction(x) {
       switch (currentTargetFunction) {
         case "polynomial": return x * x * (1 - x);
         case "square": return Math.sin(x) > 0 ? 1 : -1;
         case "step": return x > 0 ? 1 : -1;
+        case "customList":
+          // Assumes `customList` is defined elsewhere as an array of numbers.
+          return customListFunction(x, customList);
         case "custom":
           try { return new Function('x', 'return ' + customFunctionInput.value)(x); }
           catch (e) { console.error("Error in custom function:", e); return Math.sin(x); }
@@ -554,33 +607,12 @@
       if (learningRate < 0.00001)
         return false;
       nn.learningRate = learningRate;
-      let inDim = parseInt(inputDimInput.value);
-      let outDim = parseInt(outputDimInput.value);
-
-
       let x, y;
-
-      if (currentTargetFunction === "image" && imageData) {
-        // For image training, use 2D input and scalar output
-        if (inDim === 2 && outDim === 3) {
-          const sample = sampleImagePoint();
-          x = [sample.x, sample.y];
-          // y = [sample.value];
-          y = [sample.value[0], sample.value[1], sample.value[2]];
-        } else {
-          // Fallback to standard method if dimensions are wrong
-          x = [Math.random() * (xMax - xMin) + xMin, Math.random() * (yMax - yMin) + yMin];
-          y = [targetFunction(x[0])];
-        }
-      } else if (outDim === 1) {
-        x = Array(inDim).fill().map(() => Math.random() * (xMax - xMin) + xMin);
-        y = [targetFunction(x[0])];
-      } else {
-        y = [];
-        for (let i = 0; i < outDim; i++) {
-          y.push(targetFunction(x[i % x.length]));
-        }
-      }
+      if (!imageData) return false;
+      const sample = sampleImagePoint();
+      x = [sample.x, sample.y];
+      // y = [sample.value];
+      y = [sample.value[0], sample.value[1], sample.value[2]];
       nn.train(x, y, learningRate);
       return true;
     }
@@ -635,7 +667,7 @@
         ctx.stroke();
       } else if (parseInt(inputDimInput.value) === 2) {
         // For 2D input (like image data), draw a heatmap
-        const resolution = 50; // Number of samples in each dimension
+        const resolution = parseInt(resolutionInput.value); // Number of samples in each dimension
         const cellWidth = width / resolution;
         const cellHeight = height / resolution;
 
@@ -644,7 +676,8 @@
             const x = xMin + (ix / resolution) * (xMax - xMin);
             const y = yMin + (iy / resolution) * (yMax - yMin);
 
-            const output = nn.forward([x, y]);
+            const output = nn.forward([x, y]).map(element => Math.max(0, element));
+            // const output = nn.forward([x, y]);
 
             ctx.globalAlpha = 1.0;
             ctx.fillStyle = `rgba(${output[0] * 255},${output[1] * 255},${output[2] * 255},1)`;
@@ -691,81 +724,129 @@
       const exportArea = document.getElementById("export");
       let code = "";
       let scalar = "float";
-      let actFuncName = "";
-      switch (nn.activationFunction) {
-        case "sigmoid":
-          code += "// Helper sigmoid function\n" + scalar + " sigmoid(" + scalar + " x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
-          actFuncName = "sigmoid";
-          break;
-        case "relu":
-          code += "// Helper ReLU function\n" + scalar + " relu(" + scalar + " x) { return x > 0 ? x : 0; }\n\n";
-          actFuncName = "relu";
-          break;
-        case "leakyRelu":
-          code += "// Helper Leaky ReLU function\n" + scalar + " leaky_relu(" + scalar + " x) { return x > 0 ? x : 0.01 * x; }\n\n";
-          actFuncName = "leaky_relu";
-          break;
-        case "swish":
-          code += "// Helper Swish function\n" + scalar + " swish(" + scalar + " x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
-          actFuncName = "swish";
-          break;
-        case "smoothstep":
-          code += "// Helper functions for smoothstep\n";
-          code += scalar + " mix(" + scalar + " a, " + scalar + " b, " + scalar + " t) { return (1.0 - t) * a + t * b; }\n";
-          code += scalar + " squared(" + scalar + " x) { return x * x; }\n";
-          code += scalar + " flip(" + scalar + " x) { return 1.0 - x; }\n";
-          code += scalar + " smoothstart(" + scalar + " t) { return squared(t); }\n";
-          code += scalar + " smoothstop(" + scalar + " t) { return flip(squared(flip(t))); }\n";
-          code += scalar + " smoothstep_(" + scalar + " x) {\n";
-          code += "    " + scalar + " t = (x + 4.0) / 8.0;\n";
-          code += "    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n";
-          code += "    " + scalar + " result = mix(smoothstart(t), smoothstop(t), t);\n";
-          code += "    return result * 2.0 - 1.0;\n";
-          code += "}\n\n";
-          actFuncName = "smoothstep_";
-          break;
-        case "cos":
-          actFuncName = "cos";
-          break;
-        case "sin":
-          actFuncName = "sin";
-          break;
-        case "sin30":
-          actFuncName = "sin30";
-          break;
-        case "gelu":
-          code += "// GELU activation function approximation\n";
-          code += scalar + " gelu(" + scalar + " x) { return 0.5 * x * (1.0 + tanh(sqrt(2.0 / 3.141593) * (x + 0.044715 * x * x * x))); }\n\n";
-          actFuncName = "gelu";
-          break;
-        case "elu":
-          code += "// ELU activation function (alpha=1)\n";
-          code += scalar + " elu(" + scalar + " x) { return x >= 0.0 ? x : (exp(x) - 1.0); }\n\n";
-          actFuncName = "elu";
-          break;
-        case "softplus":
-          code += "// Softplus activation function\n";
-          code += scalar + " softplus(" + scalar + " x) { return log(1.0 + exp(x)); }\n\n";
-          actFuncName = "softplus";
-          break;
-        case "linear":
-          code += "// Linear activation function (identity)\n";
-          code += scalar + " linear(" + scalar + " x) { return x; }\n\n";
-          actFuncName = "linear";
-          break;
-        case "rayleigh":
-          code += "// Rayleigh‑Jeans activation: returns x^2 for x>0, else 0\n";
-          code += scalar + " rayleigh(" + scalar + " x) { return x > 0.0 ? x * x : 0.0; }\n\n";
-          actFuncName = "rayleigh";
-          break;
-        case "expdecay":
-          code += "// Exponential decay activation function\n";
-          code += scalar + " expdecay(" + scalar + " x) { return exp(-x); }\n\n";
-          actFuncName = "expdecay";
-          break;
-        case "tanh":
-        default:
-          actFuncName = "tanh";
+      let actFuncName = "A";
+      // switch (nn.activationFunction) {
+      //     case "sigmoid":
+      //         code += "// Helper sigmoid function\n" + scalar + " sigmoid(" + scalar + " x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
+      //         actFuncName = "sigmoid";
+      //         break;
+      //     case "relu":
+      //         code += "// Helper ReLU function\n" + scalar + " relu(" + scalar + " x) { return x > 0 ? x : 0; }\n\n";
+      //         actFuncName = "relu";
+      //         break;
+      //     case "leakyRelu":
+      //         code += "// Helper Leaky ReLU function\n" + scalar + " leaky_relu(" + scalar + " x) { return x > 0 ? x : 0.01 * x; }\n\n";
+      //         actFuncName = "leaky_relu";
+      //         break;
+      //     case "swish":
+      //         code += "// Helper Swish function\n" + scalar + " swish(" + scalar + " x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+      //         actFuncName = "swish";
+      //         break;
+      //     case "smoothstep":
+      //         code += "// Helper functions for smoothstep\n";
+      //         code += scalar + " mix(" + scalar + " a, " + scalar + " b, " + scalar + " t) { return (1.0 - t) * a + t * b; }\n";
+      //         code += scalar + " squared(" + scalar + " x) { return x * x; }\n";
+      //         code += scalar + " flip(" + scalar + " x) { return 1.0 - x; }\n";
+      //         code += scalar + " smoothstart(" + scalar + " t) { return squared(t); }\n";
+      //         code += scalar + " smoothstop(" + scalar + " t) { return flip(squared(flip(t))); }\n";
+      //         code += scalar + " smoothstep_(" + scalar + " x) {\n";
+      //         code += "    " + scalar + " t = (x + 4.0) / 8.0;\n";
+      //         code += "    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n";
+      //         code += "    " + scalar + " result = mix(smoothstart(t), smoothstop(t), t);\n";
+      //         code += "    return result * 2.0 - 1.0;\n";
+      //         code += "}\n\n";
+      //         actFuncName = "smoothstep_";
+      //         break;
+      //     case "cos":
+      //         actFuncName = "cos";
+      //         break;
+      //     case "sin":
+      //         actFuncName = "sin";
+      //         break;
+      //     case "sin30":
+      //         actFuncName = "sin30";
+      //         break;
+      //     case "gelu":
+      //         code += "// GELU activation function approximation\n";
+      //         code += scalar + " gelu(" + scalar + " x) { return 0.5 * x * (1.0 + tanh(sqrt(2.0 / 3.141593) * (x + 0.044715 * x * x * x))); }\n\n";
+      //         actFuncName = "gelu";
+      //         break;
+      //     case "elu":
+      //         code += "// ELU activation function (alpha=1)\n";
+      //         code += scalar + " elu(" + scalar + " x) { return x >= 0.0 ? x : (exp(x) - 1.0); }\n\n";
+      //         actFuncName = "elu";
+      //         break;
+      //     case "softplus":
+      //         code += "// Softplus activation function\n";
+      //         code += scalar + " softplus(" + scalar + " x) { return log(1.0 + exp(x)); }\n\n";
+      //         actFuncName = "softplus";
+      //         break;
+      //     case "linear":
+      //         code += "// Linear activation function (identity)\n";
+      //         code += scalar + " linear(" + scalar + " x) { return x; }\n\n";
+      //         actFuncName = "linear";
+      //         break;
+      //     case "rayleigh":
+      //         code += "// Rayleigh‑Jeans activation: returns x^2 for x>0, else 0\n";
+      //         code += scalar + " rayleigh(" + scalar + " x) { return x > 0.0 ? x * x : 0.0; }\n\n";
+      //         actFuncName = "rayleigh";
+      //         break;
+      //     case "expdecay":
+      //         code += "// Exponential decay activation function\n";
+      //         code += scalar + " expdecay(" + scalar + " x) { return exp(-x); }\n\n";
+      //         actFuncName = "expdecay";
+      //         break;
+      //     case "tanh":
+      //     default:
+      //         actFuncName = "tanh";
+      // }
+
+      /*
+      #define Q8(X) ((float(X) / 255.0) * 2.0 - 1.0)
+      #define Q1(X) ((float(X)) * 2.0 - 1.0)
+      #define Q(X) Q8(X)
+      //#define Q(X) X
+      #define A(X) cos(X)
+      #define PI (355./113.)
+      //#define PI (3.14159265359)
+      
+      void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+          vec2 uv = fragCoord / iResolution.xy;
+          
+          float x = mix(-PI, PI, uv.x);
+          float y = mix(-PI, PI, 1. - uv.y);
+          float scale = 1.0 + 1.125 * (sin(iTime) + 1.0);
+          vec3 color = f(vec2(x * scale, y * scale));
+          fragColor = vec4(color, 1.0);
+      }
+      */
+      // 8-bits
+      function quantize8(weight) {
+        return Math.round(((weight + 1) / 2) * 255);
+      }
+      // 1-bit
+      function quantize1(weight) {
+        return weight < 0 ? 0 : 1;
+      }
+      // 1-bit (rounded)
+      function quantize1m(weight) {
+        return Math.round((weight + 1) / 2);
+      }
+      function quantize(weight) {
+        return quantize8(weight);
+      }
+      // float dequantize(float quantized) {
+      //     return (quantized / 127.5) - 1.0;
+      // }
+
+      //const float QUANT_SCALE = 127.0;
+      //const float DEQUANT_SCALE = 1.0 / QUANT_SCALE;
+
+      // function serialize_coeff(x)
+      // Don't quantize biases
+      function serialize_weight(x) {
+        return quantize(x);
+        // return x.toFixed(6);
       }
 
       // Determine return type based on output dimension.
@@ -781,26 +862,58 @@
       }
       code += funcSignature;
       const components = [".x", ".y", ".z", ".w"];
-      // Generate hidden layer computations
+      const tempVars = [
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', /*'x',*/ 'y', 'z',
+        'aa', 'ab', 'ac', 'ad', 'ae', 'af', 'ag', 'ah', 'ai', 'aj', 'ak', 'al', 'am', 'an', 'ao', 'ap', 'aq', 'ar', 'as', 'at', 'au', 'av', 'aw', 'ax', 'ay', 'az',
+        'ba', 'bb', 'bc', 'bd', 'be', 'bf', 'bg', 'bh', 'bi', 'bj', 'bk', 'bl', 'bm', 'bn', 'bo', 'bp', 'bq', 'br', 'bs', 'bt', 'bu', 'bv', 'bw', 'bx', 'by', 'bz',
+        'ca', 'cb', 'cc', 'cd', 'ce', 'cf', 'cg', 'ch', 'ci', 'cj', 'ck', 'cl', 'cm', 'cn', 'co', 'cp', 'cq', 'cr', 'cs', 'ct', 'cu', 'cv', 'cw', 'cx', 'cy', 'cz',
+        'da', 'db', 'dc', 'dd', 'de', 'df', 'dg', 'dh', 'di', 'dj', 'dk', 'dl', 'dm', 'dn', 'do', 'dp', 'dq', 'dr', 'ds', 'dt', 'du', 'dv', 'dw', 'dx', 'dy', 'dz',
+        'ea', 'eb', 'ec', 'ed', 'ee', 'ef', 'eg', 'eh', 'ei', 'ej', 'ek', 'el', 'em', 'en', 'eo', 'ep', 'eq', 'er', 'es', 'et', 'eu', 'ev', 'ew', 'ex', 'ey', 'ez',
+        'fa', 'fb', 'fc', 'fd', 'fe', 'ff', 'fg', 'fh', 'fi', 'fj', 'fk', 'fl', 'fm', 'fn', 'fo', 'fp', 'fq', 'fr', 'fs', 'ft', 'fu', 'fv', 'fw', 'fx', 'fy', 'fz',
+        'ga', 'gb', 'gc', 'gd', 'ge', 'gf', 'gg', 'gh', 'gi', 'gj', 'gk', 'gl', 'gm', 'gn', 'go', 'gp', 'gq', 'gr', 'gs', 'gt', 'gu', 'gv', 'gw', 'gx', 'gy', 'gz',
+        'ha', 'hb', 'hc', 'hd', 'he', 'hf', 'hg', 'hh', 'hi', 'hj', 'hk', 'hl', 'hm', 'hn', 'ho', 'hp', 'hq', 'hr', 'hs', 'ht', 'hu', 'hv', 'hw', 'hx', 'hy', 'hz',
+        'ia', 'ib', 'ic', 'id', 'ie', 'if', 'ig', 'ih', 'ii', 'ij', 'ik', 'il', 'im', 'in', 'io', 'ip', 'iq', 'ir', 'is', 'it', 'iu', 'iv', 'iw', 'ix', 'iy', 'iz'
+      ];
+      // Assume tempVars is an array of 256 short variable names.
+      let tempIndex = 0;
+      const hiddenLayerVars = [];
+      // Preassign names for all hidden layer neurons.
+      for (let l = 0; l < nn.numHiddenLayers; l++) {
+        hiddenLayerVars[l] = [];
+        for (let i = 0; i < nn.hiddenSize; i++) {
+          hiddenLayerVars[l][i] = tempVars[tempIndex++];
+        }
+      }
+      const outputVars = [];
+      // Preassign names for all output neurons.
+      for (let i = 0; i < nn.outputSize; i++) {
+        outputVars[i] = tempVars[tempIndex++];
+      }
+
+      // Generate hidden layer computations.
       for (let l = 0; l < nn.numHiddenLayers; l++) {
         for (let i = 0; i < nn.hiddenSize; i++) {
           let line = "";
           if (l === 0) {
             if (nn.inputSize === 1) {
-              line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( x * " + nn.weights[0][i][0].toFixed(6) + " + " + nn.biases[0][i].toFixed(6) + " );\n";
+              line = "    " + scalar + " " + hiddenLayerVars[l][i] + " = " + actFuncName +
+                "( x * Q(" + serialize_weight(nn.weights[0][i][0]) + ") + " +
+                nn.biases[0][i].toFixed(6) + " );\n";
             } else {
               let terms = [];
               for (let j = 0; j < nn.inputSize; j++) {
-                terms.push("x" + components[j] + " * " + nn.weights[0][i][j].toFixed(6));
+                terms.push("x" + components[j] + " * Q(" + serialize_weight(nn.weights[0][i][j]) + ")");
               }
-              line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[0][i].toFixed(6) + " );\n";
+              line = "    " + scalar + " " + hiddenLayerVars[l][i] + " = " + actFuncName +
+                "( " + terms.join(" + ") + " + " + nn.biases[0][i].toFixed(6) + " );\n";
             }
           } else {
             let terms = [];
             for (let j = 0; j < nn.hiddenSize; j++) {
-              terms.push("a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6));
+              terms.push(hiddenLayerVars[l - 1][j] + " * Q(" + serialize_weight(nn.weights[l][i][j]) + ")");
             }
-            line = "    " + scalar + " a" + l + "_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[l][i].toFixed(6) + " );\n";
+            line = "    " + scalar + " " + hiddenLayerVars[l][i] + " = " + actFuncName +
+              "( " + terms.join(" + ") + " + " + nn.biases[l][i].toFixed(6) + " );\n";
           }
           code += line;
         }
@@ -812,25 +925,132 @@
         let last = nn.numHiddenLayers - 1;
         let terms = [];
         for (let j = 0; j < nn.hiddenSize; j++) {
-          terms.push("a" + last + "_" + j + " * " + nn.outputWeights[i][j].toFixed(6));
+          terms.push(hiddenLayerVars[last][j] + " * Q(" + serialize_weight(nn.outputWeights[i][j]) + ")");
         }
-        line = "    " + scalar + " out" + i + " = " + nn.outputBias[i].toFixed(6) + " + " + terms.join(" + ") + ";\n";
+        line = "    " + scalar + " " + outputVars[i] + " = " + nn.outputBias[i].toFixed(6) +
+          " + " + terms.join(" + ") + ";\n";
         code += line;
       }
 
       // Return the output using vector constructor if output dim > 1.
       if (nn.outputSize === 1) {
-        code += "    return out0;\n";
+        code += "    return " + outputVars[0] + ";\n";
       } else {
-        let outs = [];
-        for (let i = 0; i < nn.outputSize; i++) {
-          outs.push("out" + i);
-        }
-        code += "    return " + retType + "(" + outs.join(", ") + ");\n";
+        code += "    return " + retType + "(" + outputVars.join(", ") + ");\n";
       }
       code += "}\n";
 
+      // // Generate hidden layer computations
+      // for (let l = 0; l < nn.numHiddenLayers; l++) {
+      //     for (let i = 0; i < nn.hiddenSize; i++) {
+      //         let line = "";
+      //         if (l === 0) {
+      //             if (nn.inputSize === 1) {
+      //                 line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( x * Q(" + serialize_weight(nn.weights[0][i][0]) + ") + " + nn.biases[0][i].toFixed(6) + " );\n";
+      //             } else {
+      //                 let terms = [];
+      //                 for (let j = 0; j < nn.inputSize; j++) {
+      //                     terms.push("x" + components[j] + " * Q(" + serialize_weight(nn.weights[0][i][j]) + ")");
+      //                 }
+      //                 line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[0][i].toFixed(6) + " );\n";
+      //             }
+      //         } else {
+      //             let terms = [];
+      //             for (let j = 0; j < nn.hiddenSize; j++) {
+      //                 terms.push("a" + (l - 1) + "_" + j + " * Q(" + serialize_weight(nn.weights[l][i][j]) + ")");
+      //             }
+      //             line = "    " + scalar + " a" + l + "_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[l][i].toFixed(6) + " );\n";
+      //         }
+      //         code += line;
+      //     }
+      // }
+
+      // // Compute output neurons.
+      // for (let i = 0; i < nn.outputSize; i++) {
+      //     let line = "";
+      //     let last = nn.numHiddenLayers - 1;
+      //     let terms = [];
+      //     for (let j = 0; j < nn.hiddenSize; j++) {
+      //         terms.push("a" + last + "_" + j + " * Q(" + serialize_weight(nn.outputWeights[i][j]) + ")");
+      //     }
+      //     line = "    " + scalar + " out" + i + " = " + nn.outputBias[i].toFixed(6) + " + " + terms.join(" + ") + ";\n";
+      //     code += line;
+      // }
+
+      // Return the output using vector constructor if output dim > 1.
+      // if (nn.outputSize === 1) {
+      //     code += "    return out0;\n";
+      // } else {
+      //     let outs = [];
+      //     for (let i = 0; i < nn.outputSize; i++) {
+      //         outs.push("out" + i);
+      //     }
+      //     code += "    return " + retType + "(" + outs.join(", ") + ");\n";
+      // }
+      // code += "}\n";
+
+      // const values = nn.toFlatArray();
+      // code += `const float coeff[${values.length+1}] = float[${values.length+1}](`;
+      // for (let v of values)
+      // {
+      //     code += `${v.toFixed(6)},`;
+      // }
+      // code += `0.);`;
+      /*
+
+      const int INPUT_SIZE  = 2;
+      const int HIDDEN_SIZE = 20;
+      const int NUM_HIDDEN  = 4;
+      const int OUTPUT_SIZE = 3;
+
+      // Activation function (assumed defined elsewhere)
+      float activation(float x) {
+          // e.g., a ReLU or sigmoid – adjust as needed.
+          return max(0.0, x);
+      }
+
+      // Neural network function
+      // Using a vector input (for INPUT_SIZE > 1):
+      vec1 f(vec3 x) {
+          // Compute first hidden layer:
+          float a0[HIDDEN_SIZE];
+          for (int i = 0; i < HIDDEN_SIZE; i++) {
+              // dot product of x and weights0[i]
+              float sum = biases0[i];
+              for (int j = 0; j < INPUT_SIZE; j++) {
+                  sum += x[j] * weights0[i][j];
+              }
+              a0[i] = activation(sum);
+          }
+          
+          // Compute second (and subsequent) hidden layers:
+          float a1[HIDDEN_SIZE];
+          for (int i = 0; i < HIDDEN_SIZE; i++) {
+              float sum = biases1[i];
+              for (int j = 0; j < HIDDEN_SIZE; j++) {
+                  sum += a0[j] * weights1[i][j];
+              }
+              a1[i] = activation(sum);
+          }
+          
+          // Compute output layer:
+          float out[OUTPUT_SIZE];
+          for (int i = 0; i < OUTPUT_SIZE; i++) {
+              float sum = outputBiases[i];
+              for (int j = 0; j < HIDDEN_SIZE; j++) {
+                  sum += a1[j] * outputWeights[i][j];
+              }
+              out[i] = sum;
+          }
+          
+          // Return a scalar if OUTPUT_SIZE == 1.
+          // (If OUTPUT_SIZE > 1, you could return a vector constructed from out[0], out[1], etc.)
+          return out[0];
+      }
+      */
+
       exportArea.value = code;
+
     }
 
     // Event listeners
@@ -933,6 +1153,7 @@
 
         outputDimInput.value = "3";
         nn.outputSize = 3;
+        isTraining = true;
 
         // Re-initialize the network with the new dimensions
         nn.initializeWeights();
@@ -943,15 +1164,13 @@
         alert("Please upload an image first.");
       }
     });
-
-    // Show/hide image upload container based on selected function
-    targetFunctionSelect.addEventListener("change", function () {
-      currentTargetFunction = this.value;
-      if (this.value === "custom") {
+    function setTargetFunctionSelect(val) {
+      currentTargetFunction = val;
+      if (val === "custom") {
         customFunctionInput.style.display = "inline-block";
         customFunctionLabel.style.display = "inline-block";
         imageUploadContainer.style.display = "none";
-      } else if (this.value === "image") {
+      } else if (val === "image") {
         customFunctionInput.style.display = "none";
         customFunctionLabel.style.display = "none";
         imageUploadContainer.style.display = "flex";
@@ -960,6 +1179,10 @@
         customFunctionLabel.style.display = "none";
         imageUploadContainer.style.display = "none";
       }
+    }
+    // Show/hide image upload container based on selected function
+    targetFunctionSelect.addEventListener("change", function () {
+      setTargetFunctionSelect(this.value);
     });
     function animate() {
       for (let i = 0; i < batchSize; i++) { if (!trainStep(epoch_)) break; }
@@ -970,6 +1193,7 @@
       requestAnimationFrame(animate);
     }
     animate();
+    window.onload = () => { setTargetFunctionSelect("image"); };
   </script>
 </body>
 
