@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>SGD Neural Network Curve Approximation</title>
+    <title>SGD Neural Network Curve Approximation with C Export</title>
     <style>
         canvas {
             border: 1px solid #333;
@@ -11,7 +11,8 @@
             margin: 20px auto;
         }
 
-        #stats {
+        #stats,
+        #export-container {
             width: 600px;
             margin: 0 auto;
             font-family: monospace;
@@ -19,6 +20,13 @@
             background: #f9f9f9;
             padding: 10px;
             border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+
+        #export {
+            width: 100%;
+            height: 200px;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -26,6 +34,10 @@
 <body>
     <canvas id="canvas" width="600" height="400"></canvas>
     <div id="stats"></div>
+    <div id="export-container">
+        <strong>Exported C Function:</strong>
+        <textarea id="export" readonly></textarea>
+    </div>
     <script>
         // Neural Network with one hidden layer
         class NeuralNetwork {
@@ -186,14 +198,31 @@
         // Update the stats display with current weights and biases
         function updateStats() {
             const statsDiv = document.getElementById("stats");
-            let statsText = "Weights1 (input -> hidden):\n" + nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(4)}`).join("\n") + "\n\n";
-            statsText += "Bias1 (hidden):\n" + nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(4)}`).join("\n") + "\n\n";
-            statsText += "Weights2 (hidden -> output):\n" + nn.weights2.map((w, i) => `  Neuron ${i}: ${w.toFixed(4)}`).join("\n") + "\n\n";
-            statsText += "Bias2 (output): " + nn.bias2.toFixed(4);
+            let statsText = "Weights1 (input -> hidden):\n" + nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
+            statsText += "Bias1 (hidden):\n" + nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
+            statsText += "Weights2 (hidden -> output):\n" + nn.weights2.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
+            statsText += "Bias2 (output): " + nn.bias2.toFixed(6);
             statsDiv.textContent = statsText;
         }
 
-        // Animation loop: perform multiple training steps per frame, update drawing and stats
+        // Generate and update the export textarea with a C function
+        function updateExport() {
+            const exportArea = document.getElementById("export");
+            let code = "double neural_net(double x) {\n";
+            // Compute each hidden neuron output using tanh
+            for (let i = 0; i < nn.hiddenSize; i++) {
+                code += "    double a" + i + " = tanh(x * " + nn.weights1[i].toFixed(6) + " + " + nn.bias1[i].toFixed(6) + ");\n";
+            }
+            code += "    double output = " + nn.bias2.toFixed(6) + ";\n";
+            for (let i = 0; i < nn.hiddenSize; i++) {
+                code += "    output += " + nn.weights2[i].toFixed(6) + " * a" + i + ";\n";
+            }
+            code += "    return output;\n";
+            code += "}\n";
+            exportArea.value = code;
+        }
+
+        // Animation loop: perform multiple training steps per frame, update drawing, stats, and export code
         function animate() {
             // Run several training iterations per frame for faster convergence
             for (let i = 0; i < 100; i++) {
@@ -201,6 +230,7 @@
             }
             draw();
             updateStats();
+            updateExport();
             requestAnimationFrame(animate);
         }
 
