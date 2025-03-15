@@ -162,6 +162,9 @@
             <option value="swish">Swish</option>
             <option value="smoothstep">Smoothstep</option>
             <option value="cos">Cosine</option>
+            <option value="sin">Sine</option>
+            <option value="sin30">Sine Omega 30 (SIREN)</option>
+            <!-- https://arxiv.org/abs/2006.09661 -->
             <option value="gelu">GELU</option>
             <option value="elu">ELU</option>
             <option value="softplus">Softplus</option>
@@ -254,14 +257,6 @@
       const imageData = previewCtx.getImageData(0, 0, scaledWidth, scaledHeight);
       const pixels = imageData.data;
 
-      // Convert to grayscale and normalize to -1 to 1 range
-      // const grayscaleData = [];
-      // for (let i = 0; i < pixels.length; i += 4) {
-      //     // Convert RGB to grayscale using luminosity method
-      //     const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-      //     // Normalize to -1 to 1 range
-      //     grayscaleData.push((gray / 128.0) - 1.0);
-      // }
       const data = [];
       for (let i = 0; i < pixels.length; i += 4) {
         // Normalize to -1 to 1 range
@@ -302,6 +297,7 @@
       return { x, y, value: getImageValue(x, y) };
     }
 
+    let epoch_ = 0;
     // Neural Network supporting multi-dimensional input/output and multiple hidden layers
     class NeuralNetwork {
       constructor(inputSize, hiddenSize, numHiddenLayers, outputSize, learningRate) {
@@ -315,6 +311,8 @@
       }
 
       initializeWeights() {
+        epoch_ = 0;
+
         // Hidden layers weights & biases
         this.weights = [];
         this.biases = [];
@@ -363,6 +361,8 @@
           case "swish": return x * (1 / (1 + Math.exp(-x)));
           case "smoothstep": return smoothstepFunc(x);
           case "cos": return Math.cos(x);
+          case "sin": return Math.sin(x);
+          case "sin30": return Math.sin(0.5236 * x);
           case "gelu": return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
           case "elu": return x >= 0 ? x : (Math.exp(x) - 1);
           case "softplus": return Math.log(1 + Math.exp(x));
@@ -388,6 +388,8 @@
           }
           case "smoothstep": return smoothstepPrime(x);
           case "cos": return -Math.sin(x);
+          case "sin": return Math.cos(x);
+          case "sin30": return 0.5236 * Math.cos(0.5236 * x);
           case "gelu": {
             const k = Math.sqrt(2 / Math.PI);
             const tanhTerm = Math.tanh(k * (x + 0.044715 * Math.pow(x, 3)));
@@ -439,7 +441,7 @@
       }
 
       // Train on one sample: x (array) and target (array) should have proper dimensions.
-      train(x, target) {
+      train(x, target, learningRate) {
         let output = this.forward(x);
         let errors = [];
         for (let i = 0; i < this.outputSize; i++) {
@@ -451,9 +453,9 @@
         for (let i = 0; i < this.outputSize; i++) {
           for (let j = 0; j < this.hiddenSize; j++) {
             let grad = errors[i] * this.h[lastLayer][j];
-            this.outputWeights[i][j] -= this.learningRate * grad;
+            this.outputWeights[i][j] -= learningRate * grad;
           }
-          this.outputBias[i] -= this.learningRate * errors[i];
+          this.outputBias[i] -= learningRate * errors[i];
         }
 
         // Backpropagation through hidden layers
@@ -485,9 +487,9 @@
           let layerInput = (l === 0) ? x : this.h[l - 1];
           for (let i = 0; i < this.hiddenSize; i++) {
             for (let j = 0; j < layerInput.length; j++) {
-              this.weights[l][i][j] -= this.learningRate * deltas[l][i] * layerInput[j];
+              this.weights[l][i][j] -= learningRate * deltas[l][i] * layerInput[j];
             }
-            this.biases[l][i] -= this.learningRate * deltas[l][i];
+            this.biases[l][i] -= learningRate * deltas[l][i];
           }
         }
       }
@@ -543,9 +545,15 @@
       }
     }
 
+    let initialLearningRate = 0.01;  // Initial learning rate
+    let decayRate = 0.0025;  // Decay rate for learning rate
     // Training step: generate a random input vector and corresponding target vector.
-    function trainStep() {
-      if (!isTraining) return;
+    function trainStep(epoch) {
+      if (!isTraining) return false;
+      let learningRate = initialLearningRate * Math.exp(-decayRate * epoch);
+      if (learningRate < 0.00001)
+        return false;
+      nn.learningRate = learningRate;
       let inDim = parseInt(inputDimInput.value);
       let outDim = parseInt(outputDimInput.value);
 
@@ -573,7 +581,8 @@
           y.push(targetFunction(x[i % x.length]));
         }
       }
-      nn.train(x, y);
+      nn.train(x, y, learningRate);
+      return true;
     }
 
     // Draw function: uses first input dimension for plotting.
@@ -589,32 +598,6 @@
       ctx.stroke();
 
       if (currentTargetFunction === "image" && imageData) {
-        // // Draw image data as a heatmap
-        // const imgWidth = imageData.width;
-        // const imgHeight = imageData.height;
-
-        // // Calculate pixel size
-        // const pixelWidth = width / imgWidth;
-        // const pixelHeight = height / imgHeight;
-
-        // // Draw each pixel
-        // for (let y = 0; y < imgHeight; y++) {
-        //     for (let x = 0; x < imgWidth; x++) {
-        //         const index = y * imgWidth + x;
-        //         const value = imageData.data[index];
-
-        //         // Convert from -1,1 to grayscale (0,255)
-        //         const brightness = Math.floor(((value + 1) / 2) * 255);
-
-        //         ctx.fillStyle = `rgb(${brightness},${brightness},${brightness})`;
-        //         ctx.fillRect(
-        //             x * pixelWidth,
-        //             y * pixelHeight,
-        //             pixelWidth + 0.5,
-        //             pixelHeight + 0.5
-        //         );
-        //     }
-        // }
       } else {
         // Draw target function (traditional curve)
         ctx.strokeStyle = "blue";
@@ -661,17 +644,10 @@
             const x = xMin + (ix / resolution) * (xMax - xMin);
             const y = yMin + (iy / resolution) * (yMax - yMin);
 
-            // Get neural network output for this point
             const output = nn.forward([x, y]);
-            // const output = nn.forward([x, y])[0];
-            // Convert from -1,1 to a red intensity
-            // const redValue = Math.floor(((output + 1) / 2) * 255);
 
-            // Set transparency for overlay visualization
             ctx.globalAlpha = 1.0;
             ctx.fillStyle = `rgba(${output[0] * 255},${output[1] * 255},${output[2] * 255},1)`;
-            // ctx.globalAlpha = 0.5;
-            // ctx.fillStyle = `rgba(255,0,0,${output > 0 ? output : 0})`;
             ctx.fillRect(
               ix * cellWidth,
               iy * cellHeight,
@@ -681,22 +657,6 @@
           }
         }
         ctx.globalAlpha = 1.0;
-      }
-
-      ctx.font = "12px Arial";
-      if (currentTargetFunction === "image") {
-        ctx.fillStyle = "black";
-        // ctx.fillText("Image Data (Grayscale)", 10, 20);
-      } else {
-        ctx.fillStyle = "blue";
-        // ctx.fillText("Target Function", 10, 20);
-      }
-      ctx.fillStyle = "red";
-      // ctx.fillText("Neural Network Output", 10, 40);
-      if (currentTargetFunction === "image" && imageData) {
-        ctx.fillStyle = "black";
-        // ctx.fillText(`Image Size: ${imageData.width}x${imageData.height}`, 10, 60);
-        // ctx.fillText("Set input dim = 2, output dim = 1 for best results", 10, 80);
       }
     }
 
@@ -766,6 +726,12 @@
           break;
         case "cos":
           actFuncName = "cos";
+          break;
+        case "sin":
+          actFuncName = "sin";
+          break;
+        case "sin30":
+          actFuncName = "sin30";
           break;
         case "gelu":
           code += "// GELU activation function approximation\n";
@@ -995,12 +961,12 @@
         imageUploadContainer.style.display = "none";
       }
     });
-
     function animate() {
-      for (let i = 0; i < batchSize; i++) { trainStep(); }
+      for (let i = 0; i < batchSize; i++) { if (!trainStep(epoch_)) break; }
       draw();
       updateStats();
       updateExport();
+      epoch_++;
       requestAnimationFrame(animate);
     }
     animate();
