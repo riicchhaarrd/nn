@@ -10,11 +10,22 @@
             display: block;
             margin: 20px auto;
         }
+
+        #stats {
+            width: 600px;
+            margin: 0 auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 
 <body>
     <canvas id="canvas" width="600" height="400"></canvas>
+    <div id="stats"></div>
     <script>
         // Neural Network with one hidden layer
         class NeuralNetwork {
@@ -107,8 +118,7 @@
 
         // Target function to approximate (sine curve)
         function targetFunction(x) {
-            //   return Math.sin(x);
-            return x * x * (1 - x);
+            return Math.sin(x);
         }
 
         // Perform one training step using a random sample from the domain
@@ -173,13 +183,24 @@
             ctx.stroke();
         }
 
-        // Animation loop: perform multiple training steps per frame and update the drawing
+        // Update the stats display with current weights and biases
+        function updateStats() {
+            const statsDiv = document.getElementById("stats");
+            let statsText = "Weights1 (input -> hidden):\n" + nn.weights1.map((w, i) => `  Neuron ${i}: ${w.toFixed(4)}`).join("\n") + "\n\n";
+            statsText += "Bias1 (hidden):\n" + nn.bias1.map((b, i) => `  Neuron ${i}: ${b.toFixed(4)}`).join("\n") + "\n\n";
+            statsText += "Weights2 (hidden -> output):\n" + nn.weights2.map((w, i) => `  Neuron ${i}: ${w.toFixed(4)}`).join("\n") + "\n\n";
+            statsText += "Bias2 (output): " + nn.bias2.toFixed(4);
+            statsDiv.textContent = statsText;
+        }
+
+        // Animation loop: perform multiple training steps per frame, update drawing and stats
         function animate() {
             // Run several training iterations per frame for faster convergence
             for (let i = 0; i < 100; i++) {
                 trainStep();
             }
             draw();
+            updateStats();
             requestAnimationFrame(animate);
         }
 
