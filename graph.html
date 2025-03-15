@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Enhanced Neural Network Curve Approximation with C Export</title>
@@ -12,10 +13,10 @@
       gap: 20px;
       margin: 20px;
     }
+
     /* Left panel for the canvas */
-    #left-panel {
-      /* The canvas retains its 600px width and 400px height */
-    }
+    #left-panel {}
+
     /* Right panel for stats and export function */
     #right-panel {
       display: flex;
@@ -23,11 +24,13 @@
       gap: 20px;
       width: 300px;
     }
+
     #right-panel2 {
       display: flex;
       flex-direction: column;
       gap: 20px;
     }
+
     /* Styling for stats and export containers */
     #stats,
     #export-container {
@@ -39,6 +42,7 @@
       border: 1px solid #ddd;
       box-sizing: border-box;
     }
+
     #export-container2 {
       font-family: monospace;
       background: #f9f9f9;
@@ -46,16 +50,19 @@
       border: 1px solid #ddd;
       box-sizing: border-box;
     }
+
     #export {
       height: 430px;
       width: 370px;
       font-family: monospace;
       box-sizing: border-box;
     }
+
     canvas {
       border: 1px solid #333;
       display: block;
     }
+
     /* Styling for control panel */
     #control-panel {
       margin-top: 10px;
@@ -63,6 +70,7 @@
       background: #f0f0f0;
       border: 1px solid #ddd;
     }
+
     #network-controls {
       display: grid;
       grid-template-columns: auto auto;
@@ -70,6 +78,7 @@
       align-items: center;
       margin-bottom: 10px;
     }
+
     #function-controls {
       display: grid;
       grid-template-columns: auto auto;
@@ -79,14 +88,17 @@
       padding-top: 10px;
       border-top: 1px solid #ddd;
     }
+
     select,
     input,
     label {
       font-family: sans-serif;
     }
+
     input[type="number"] {
       width: 60px;
     }
+
     button {
       margin-top: 10px;
       padding: 5px 10px;
@@ -96,17 +108,25 @@
       border-radius: 4px;
       cursor: pointer;
     }
+
     button:hover {
       background: #45a049;
     }
   </style>
 </head>
+
 <body>
   <div id="container">
     <div id="left-panel">
       <canvas id="canvas" width="600" height="400"></canvas>
       <div id="control-panel">
         <div id="network-controls">
+          <!-- New controls for vector dimensions -->
+          <label for="input-dim">Input Dim:</label>
+          <input type="number" id="input-dim" min="1" max="10" value="1">
+          <label for="output-dim">Output Dim:</label>
+          <input type="number" id="output-dim" min="1" max="10" value="1">
+
           <label for="hidden-size">Hidden Neurons:</label>
           <input type="number" id="hidden-size" min="1" max="50" value="10">
 
@@ -147,7 +167,8 @@
             <option value="custom">Custom</option>
           </select>
 
-          <label for="custom-function" id="custom-function-label" style="display:none;">Custom Function:</label>
+          <label for="custom-function" id="custom-function-label" style="display:none;">Custom
+            Function:</label>
           <input type="text" id="custom-function" value="Math.sin(x)" style="display:none;">
         </div>
 
@@ -167,23 +188,14 @@
       </div>
     </div>
   </div>
+
   <script>
     // Helper functions for smoothstep
-    function mix(a, b, weightb) {
-      return (1 - weightb) * a + (weightb) * b;
-    }
-    function squared(x) {
-      return x * x;
-    }
-    function flip(x) {
-      return 1 - x;
-    }
-    function smoothstart(t) {
-      return squared(t);
-    }
-    function smoothstop(t) {
-      return flip(squared(flip(t)));
-    }
+    function mix(a, b, weightb) { return (1 - weightb) * a + weightb * b; }
+    function squared(x) { return x * x; }
+    function flip(x) { return 1 - x; }
+    function smoothstart(t) { return squared(t); }
+    function smoothstop(t) { return flip(squared(flip(t))); }
     function smoothstepFunc(x) {
       let t = (x + 4) / 8;
       t = Math.max(0, Math.min(1, t));
@@ -197,7 +209,7 @@
       return dtResult * (1 / 8) * 2;
     }
 
-    // Neural Network with multiple hidden layers
+    // Neural Network supporting multi-dimensional input/output and multiple hidden layers
     class NeuralNetwork {
       constructor(inputSize, hiddenSize, numHiddenLayers, outputSize, learningRate) {
         this.inputSize = inputSize;
@@ -208,17 +220,18 @@
         this.activationFunction = "tanh"; // default activation
         this.initializeWeights();
       }
-      
+
       initializeWeights() {
+        // Hidden layers weights & biases
         this.weights = [];
         this.biases = [];
-        let inputDim = this.inputSize;
+        let inDim = this.inputSize;
         for (let l = 0; l < this.numHiddenLayers; l++) {
           let layerWeights = [];
           let layerBiases = [];
           for (let i = 0; i < this.hiddenSize; i++) {
             let neuronWeights = [];
-            for (let j = 0; j < inputDim; j++) {
+            for (let j = 0; j < inDim; j++) {
               neuronWeights.push(Math.random() * 2 - 1);
             }
             layerWeights.push(neuronWeights);
@@ -226,110 +239,83 @@
           }
           this.weights.push(layerWeights);
           this.biases.push(layerBiases);
-          inputDim = this.hiddenSize;
+          inDim = this.hiddenSize;
         }
+        // Output layer: matrix of dimension outputSize x hiddenSize and biases vector of length outputSize
         this.outputWeights = [];
-        for (let i = 0; i < this.hiddenSize; i++) {
-          this.outputWeights.push(Math.random() * 2 - 1);
+        for (let i = 0; i < this.outputSize; i++) {
+          let row = [];
+          for (let j = 0; j < this.hiddenSize; j++) {
+            row.push(Math.random() * 2 - 1);
+          }
+          this.outputWeights.push(row);
         }
-        this.outputBias = Math.random() * 2 - 1;
+        this.outputBias = [];
+        for (let i = 0; i < this.outputSize; i++) {
+          this.outputBias.push(Math.random() * 2 - 1);
+        }
       }
-      
-      setActivationFunction(funcName) {
-        this.activationFunction = funcName;
-      }
-      
-      setLearningRate(rate) {
-        this.learningRate = rate;
-      }
-      
-      setHiddenSize(size) {
-        this.hiddenSize = size;
-        this.initializeWeights();
-      }
-      
-      setNumHiddenLayers(numLayers) {
-        this.numHiddenLayers = numLayers;
-        this.initializeWeights();
-      }
-      
+
+      setActivationFunction(funcName) { this.activationFunction = funcName; }
+      setLearningRate(rate) { this.learningRate = rate; }
+      setHiddenSize(size) { this.hiddenSize = size; this.initializeWeights(); }
+      setNumHiddenLayers(numLayers) { this.numHiddenLayers = numLayers; this.initializeWeights(); }
+
+      // Activation and derivative functions
       activate(x) {
         switch (this.activationFunction) {
-          case "sigmoid":
-            return 1 / (1 + Math.exp(-x));
-          case "relu":
-            return Math.max(0, x);
-          case "leakyRelu":
-            return x > 0 ? x : 0.01 * x;
-          case "swish":
-            return x * (1 / (1 + Math.exp(-x)));
-          case "smoothstep":
-            return smoothstepFunc(x);
-          case "cos":
-            return Math.cos(x);
-          case "gelu":
-            return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
-          case "elu":
-            return x >= 0 ? x : (Math.exp(x) - 1);
-          case "softplus":
-            return Math.log(1 + Math.exp(x));
-          case "linear":
-            return x;
-          case "rayleigh":
-            // Rayleigh‑Jeans style: x^2 for positive x, 0 otherwise.
-            return x > 0 ? x * x : 0;
-          case "expdecay":
-            return Math.exp(-x);
+          case "sigmoid": return 1 / (1 + Math.exp(-x));
+          case "relu": return Math.max(0, x);
+          case "leakyRelu": return x > 0 ? x : 0.01 * x;
+          case "swish": return x * (1 / (1 + Math.exp(-x)));
+          case "smoothstep": return smoothstepFunc(x);
+          case "cos": return Math.cos(x);
+          case "gelu": return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
+          case "elu": return x >= 0 ? x : (Math.exp(x) - 1);
+          case "softplus": return Math.log(1 + Math.exp(x));
+          case "linear": return x;
+          case "rayleigh": return x > 0 ? x * x : 0;
+          case "expdecay": return Math.exp(-x);
           case "tanh":
-          default:
-            return Math.tanh(x);
+          default: return Math.tanh(x);
         }
       }
-      
+
       activatePrime(x) {
         switch (this.activationFunction) {
           case "sigmoid": {
-              let sig = 1 / (1 + Math.exp(-x));
-              return sig * (1 - sig);
-            }
-          case "relu":
-            return x > 0 ? 1 : 0;
-          case "leakyRelu":
-            return x > 0 ? 1 : 0.01;
+            let sig = 1 / (1 + Math.exp(-x));
+            return sig * (1 - sig);
+          }
+          case "relu": return x > 0 ? 1 : 0;
+          case "leakyRelu": return x > 0 ? 1 : 0.01;
           case "swish": {
-              let sigm = 1 / (1 + Math.exp(-x));
-              return sigm + x * sigm * (1 - sigm);
-            }
-          case "smoothstep":
-            return smoothstepPrime(x);
-          case "cos":
-            return -Math.sin(x);
+            let sigm = 1 / (1 + Math.exp(-x));
+            return sigm + x * sigm * (1 - sigm);
+          }
+          case "smoothstep": return smoothstepPrime(x);
+          case "cos": return -Math.sin(x);
           case "gelu": {
-              const k = Math.sqrt(2 / Math.PI);
-              const tanhTerm = Math.tanh(k * (x + 0.044715 * Math.pow(x, 3)));
-              const left = 0.5 * (1 + tanhTerm);
-              const sech2 = 1 - tanhTerm * tanhTerm;
-              const right = 0.5 * x * sech2 * k * (1 + 3 * 0.044715 * Math.pow(x, 2));
-              return left + right;
-            }
-          case "elu":
-            return x >= 0 ? 1 : Math.exp(x);
-          case "softplus":
-            return 1 / (1 + Math.exp(-x)); // derivative is sigmoid
-          case "linear":
-            return 1;
-          case "rayleigh":
-            return x > 0 ? 2 * x : 0;
-          case "expdecay":
-            return -Math.exp(-x);
+            const k = Math.sqrt(2 / Math.PI);
+            const tanhTerm = Math.tanh(k * (x + 0.044715 * Math.pow(x, 3)));
+            const left = 0.5 * (1 + tanhTerm);
+            const sech2 = 1 - tanhTerm * tanhTerm;
+            const right = 0.5 * x * sech2 * k * (1 + 3 * 0.044715 * Math.pow(x, 2));
+            return left + right;
+          }
+          case "elu": return x >= 0 ? 1 : Math.exp(x);
+          case "softplus": return 1 / (1 + Math.exp(-x)); // derivative is sigmoid
+          case "linear": return 1;
+          case "rayleigh": return x > 0 ? 2 * x : 0;
+          case "expdecay": return -Math.exp(-x);
           case "tanh":
-          default:
-            return 1 - Math.tanh(x) * Math.tanh(x);
+          default: return 1 - Math.tanh(x) * Math.tanh(x);
         }
       }
-      
+
+      // Forward pass: now x is an array of length inputSize; output is an array of length outputSize.
       forward(x) {
-        let input = [x];
+        let current = x.slice();  // copy of input vector
         this.a = [];
         this.h = [];
         for (let l = 0; l < this.numHiddenLayers; l++) {
@@ -337,8 +323,8 @@
           let hLayer = [];
           for (let i = 0; i < this.hiddenSize; i++) {
             let sum = 0;
-            for (let j = 0; j < input.length; j++) {
-              sum += input[j] * this.weights[l][i][j];
+            for (let j = 0; j < current.length; j++) {
+              sum += current[j] * this.weights[l][i][j];
             }
             sum += this.biases[l][i];
             aLayer.push(sum);
@@ -346,35 +332,52 @@
           }
           this.a.push(aLayer);
           this.h.push(hLayer);
-          input = hLayer;
+          current = hLayer;
         }
-        let output = this.outputBias;
-        for (let i = 0; i < input.length; i++) {
-          output += input[i] * this.outputWeights[i];
+        // Output layer computation
+        let output = [];
+        for (let i = 0; i < this.outputSize; i++) {
+          let sum = this.outputBias[i];
+          for (let j = 0; j < current.length; j++) {
+            sum += current[j] * this.outputWeights[i][j];
+          }
+          output.push(sum);
         }
         return output;
       }
-      
+
+      // Training using one sample: x (array) and target (array) should have lengths inputSize and outputSize, respectively.
       train(x, target) {
-        let output = this.forward(x);
-        let error = output - target;
-        
-        // Update output layer weights and bias
-        for (let i = 0; i < this.hiddenSize; i++) {
-          let grad = error * this.h[this.numHiddenLayers - 1][i];
-          this.outputWeights[i] -= this.learningRate * grad;
+        let output = this.forward(x);  // output is an array
+        let errors = [];
+        for (let i = 0; i < this.outputSize; i++) {
+          errors.push(output[i] - target[i]);
         }
-        this.outputBias -= this.learningRate * error;
-        
-        // Backpropagation through hidden layers
-        let deltas = [];
+
+        // Update output layer weights and biases
         let lastLayer = this.numHiddenLayers - 1;
+        for (let i = 0; i < this.outputSize; i++) {
+          for (let j = 0; j < this.hiddenSize; j++) {
+            let grad = errors[i] * this.h[lastLayer][j];
+            this.outputWeights[i][j] -= this.learningRate * grad;
+          }
+          this.outputBias[i] -= this.learningRate * errors[i];
+        }
+
+        // Backpropagation for hidden layers
+        let deltas = [];
+        // Delta for last hidden layer: for each neuron j
         let delta = [];
-        for (let i = 0; i < this.hiddenSize; i++) {
-          delta.push(error * this.outputWeights[i] * this.activatePrime(this.a[lastLayer][i]));
+        for (let j = 0; j < this.hiddenSize; j++) {
+          let sum = 0;
+          for (let i = 0; i < this.outputSize; i++) {
+            sum += errors[i] * this.outputWeights[i][j];
+          }
+          delta.push(sum * this.activatePrime(this.a[lastLayer][j]));
         }
         deltas[lastLayer] = delta;
-        
+
+        // Propagate backwards for remaining hidden layers
         for (let l = this.numHiddenLayers - 2; l >= 0; l--) {
           let deltaNext = deltas[l + 1];
           let deltaCurrent = [];
@@ -387,9 +390,10 @@
           }
           deltas[l] = deltaCurrent;
         }
-        
+
+        // Update hidden layers weights and biases
         for (let l = 0; l < this.numHiddenLayers; l++) {
-          let layerInput = (l === 0) ? [x] : this.h[l - 1];
+          let layerInput = (l === 0) ? x : this.h[l - 1];
           for (let i = 0; i < this.hiddenSize; i++) {
             for (let j = 0; j < layerInput.length; j++) {
               this.weights[l][i][j] -= this.learningRate * deltas[l][i] * layerInput[j];
@@ -400,23 +404,18 @@
       }
     }
 
-    // Set up canvas and coordinate transforms
+    // Coordinate transforms for canvas drawing (using x ∈ [–π, π] and y ∈ [–1.5, 1.5])
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const xMin = -Math.PI;
-    const xMax = Math.PI;
-    const yMin = -1.5;
-    const yMax = 1.5;
-    function transformX(x) {
-      return (x - xMin) / (xMax - xMin) * width;
-    }
-    function transformY(y) {
-      return height - ((y - yMin) / (yMax - yMin) * height);
-    }
-    
-    // Get DOM elements for controls
+    const xMin = -Math.PI, xMax = Math.PI, yMin = -1.5, yMax = 1.5;
+    function transformX(x) { return (x - xMin) / (xMax - xMin) * width; }
+    function transformY(y) { return height - ((y - yMin) / (yMax - yMin) * height); }
+
+    // DOM elements for controls
+    const inputDimInput = document.getElementById("input-dim");
+    const outputDimInput = document.getElementById("output-dim");
     const hiddenSizeInput = document.getElementById("hidden-size");
     const numLayersInput = document.getElementById("num-layers");
     const learningRateInput = document.getElementById("learning-rate");
@@ -427,14 +426,20 @@
     const customFunctionLabel = document.getElementById("custom-function-label");
     const resetButton = document.getElementById("reset-network");
     const pauseButton = document.getElementById("pause-training");
-    
-    // Create the neural network with multi-layer support
-    let nn = new NeuralNetwork(1, parseInt(hiddenSizeInput.value), parseInt(numLayersInput.value), 1, parseFloat(learningRateInput.value));
+
+    // Create neural network with vector support
+    let nn = new NeuralNetwork(
+      parseInt(inputDimInput.value),
+      parseInt(hiddenSizeInput.value),
+      parseInt(numLayersInput.value),
+      parseInt(outputDimInput.value),
+      parseFloat(learningRateInput.value)
+    );
     let isTraining = true;
     let batchSize = parseInt(batchSizeInput.value);
     let currentTargetFunction = "sine";
-    
-    // Target function selection
+
+    // Target function: if output dim is 1, return a number; if >1, return an array.
     function targetFunction(x) {
       switch (currentTargetFunction) {
         case "polynomial":
@@ -455,18 +460,33 @@
           return Math.sin(x);
       }
     }
-    
-    // Perform one training step using a random sample
+
+    // Training step: generate a random vector input and compute corresponding target vector.
     function trainStep() {
       if (!isTraining) return;
-      let x = Math.random() * (xMax - xMin) + xMin;
-      let y = targetFunction(x);
+      let inDim = parseInt(inputDimInput.value);
+      let outDim = parseInt(outputDimInput.value);
+      let x = [];
+      for (let i = 0; i < inDim; i++) {
+        x.push(Math.random() * (xMax - xMin) + xMin);
+      }
+      let y;
+      if (outDim === 1) {
+        y = [targetFunction(x[0])];
+      } else {
+        y = [];
+        for (let i = 0; i < outDim; i++) {
+          // For simplicity, cycle through input elements for target computation.
+          y.push(targetFunction(x[i % x.length]));
+        }
+      }
       nn.train(x, y);
     }
-    
-    // Draw the target function and network approximation
+
+    // Draw target function and network output (only using first input dimension for plotting).
     function draw() {
       ctx.clearRect(0, 0, width, height);
+      // Axes
       ctx.strokeStyle = "black";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -475,7 +495,8 @@
       ctx.moveTo(transformX(0), 0);
       ctx.lineTo(transformX(0), height);
       ctx.stroke();
-      
+
+      // Draw target curve (blue) using first input dimension.
       ctx.strokeStyle = "blue";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -489,161 +510,205 @@
         else { ctx.lineTo(canvasX, canvasY); }
       }
       ctx.stroke();
-      
+
+      // Draw network output (red) using a vector input with first element varying.
       ctx.strokeStyle = "red";
       ctx.lineWidth = 2;
       ctx.beginPath();
       firstPoint = true;
       for (let i = 0; i <= width; i++) {
         let xVal = xMin + (i / width) * (xMax - xMin);
-        let yVal = nn.forward(xVal);
+        // Build input vector: vary first element, others fixed at 0.
+        let inputVec = [xVal];
+        for (let j = 1; j < parseInt(inputDimInput.value); j++) {
+          inputVec.push(0);
+        }
+        let outVec = nn.forward(inputVec);
+        // Use first element of network output for plotting.
         let canvasX = transformX(xVal);
-        let canvasY = transformY(yVal);
+        let canvasY = transformY(outVec[0]);
         if (firstPoint) { ctx.moveTo(canvasX, canvasY); firstPoint = false; }
         else { ctx.lineTo(canvasX, canvasY); }
       }
       ctx.stroke();
-      
+
+      // Legend
       ctx.font = "12px Arial";
       ctx.fillStyle = "blue";
       ctx.fillText("Target Function", 10, 20);
       ctx.fillStyle = "red";
       ctx.fillText("Neural Network Output", 10, 40);
     }
-    
-    // Update the stats display
+
+    // Update stats display
     function updateStats() {
       const statsDiv = document.getElementById("stats");
       let statsText = "Network Configuration:\n";
+      statsText += `Input Dim: ${nn.inputSize}\n`;
       statsText += `Hidden Neurons: ${nn.hiddenSize}\n`;
       statsText += `Hidden Layers: ${nn.numHiddenLayers}\n`;
+      statsText += `Output Dim: ${nn.outputSize}\n`;
       statsText += `Learning Rate: ${nn.learningRate}\n`;
       statsText += `Activation: ${nn.activationFunction}\n`;
       statsText += `Target Function: ${currentTargetFunction}\n\n`;
-      
+
       for (let l = 0; l < nn.numHiddenLayers; l++) {
         statsText += `Layer ${l} Weights:\n` +
-                     nn.weights[l].map((neuron, i) => `  Neuron ${i}: ${neuron.map(w => w.toFixed(6)).join(", ")}`).join("\n") + "\n\n";
+          nn.weights[l].map((neuron, i) => `  Neuron ${i}: ${neuron.map(w => w.toFixed(6)).join(", ")}`).join("\n") + "\n\n";
         statsText += `Layer ${l} Biases:\n` +
-                     nn.biases[l].map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
+          nn.biases[l].map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
       }
       statsText += "Output Weights:\n" +
-                   nn.outputWeights.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
-      statsText += "Output Bias: " + nn.outputBias.toFixed(6);
+        nn.outputWeights.map((row, i) => `  Output Neuron ${i}: ${row.map(w => w.toFixed(6)).join(", ")}`).join("\n") + "\n\n";
+      statsText += "Output Biases:\n" +
+        nn.outputBias.map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n");
       statsDiv.textContent = statsText;
     }
-    
-    // Generate and update the exported C function
+
+    // Generate C export code: if network is 1D in/out, generate a simple function;
+    // otherwise, generate a function with signature: void f(const float *x, float *y)
     function updateExport() {
       const exportArea = document.getElementById("export");
       let code = "";
-      let scalar_type = "float";
-      let activationFuncName = "";
+      let scalar = "float";
+      let actFuncName = "";
       switch (nn.activationFunction) {
         case "sigmoid":
-          code += "// Helper sigmoid function\n";
-          code += scalar_type + " sigmoid(" + scalar_type + " x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
-          activationFuncName = "sigmoid";
+          code += "// Helper sigmoid function\n" + scalar + " sigmoid(" + scalar + " x) { return 1.0 / (1.0 + exp(-x)); }\n\n";
+          actFuncName = "sigmoid";
           break;
         case "relu":
-          code += "// Helper ReLU function\n";
-          code += scalar_type + " relu(" + scalar_type + " x) { return x > 0 ? x : 0; }\n\n";
-          activationFuncName = "relu";
+          code += "// Helper ReLU function\n" + scalar + " relu(" + scalar + " x) { return x > 0 ? x : 0; }\n\n";
+          actFuncName = "relu";
           break;
         case "leakyRelu":
-          code += "// Helper Leaky ReLU function\n";
-          code += scalar_type + " leaky_relu(" + scalar_type + " x) { return x > 0 ? x : 0.01 * x; }\n\n";
-          activationFuncName = "leaky_relu";
+          code += "// Helper Leaky ReLU function\n" + scalar + " leaky_relu(" + scalar + " x) { return x > 0 ? x : 0.01 * x; }\n\n";
+          actFuncName = "leaky_relu";
           break;
         case "swish":
-          code += "// Helper Swish function\n";
-          code += scalar_type + " swish(" + scalar_type + " x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
-          activationFuncName = "swish";
+          code += "// Helper Swish function\n" + scalar + " swish(" + scalar + " x) { return x * (1.0 / (1.0 + exp(-x))); }\n\n";
+          actFuncName = "swish";
           break;
         case "smoothstep":
           code += "// Helper functions for smoothstep\n";
-          code += scalar_type + " mix(" + scalar_type + " a, " + scalar_type + " b, " + scalar_type + " weightb) { return (1.0 - weightb) * a + weightb * b; }\n";
-          code += scalar_type + " squared(" + scalar_type + " x) { return x * x; }\n";
-          code += scalar_type + " flip(" + scalar_type + " x) { return 1.0 - x; }\n";
-          code += scalar_type + " smoothstart(" + scalar_type + " t) { return squared(t); }\n";
-          code += scalar_type + " smoothstop(" + scalar_type + " t) { return flip(squared(flip(t))); }\n";
-          code += scalar_type + " smoothstep_(" + scalar_type + " x) {\n";
-          code += "    " + scalar_type + " t = (x + 4.0) / 8.0;\n";
+          code += scalar + " mix(" + scalar + " a, " + scalar + " b, " + scalar + " t) { return (1.0 - t) * a + t * b; }\n";
+          code += scalar + " squared(" + scalar + " x) { return x * x; }\n";
+          code += scalar + " flip(" + scalar + " x) { return 1.0 - x; }\n";
+          code += scalar + " smoothstart(" + scalar + " t) { return squared(t); }\n";
+          code += scalar + " smoothstop(" + scalar + " t) { return flip(squared(flip(t))); }\n";
+          code += scalar + " smoothstep_(" + scalar + " x) {\n";
+          code += "    " + scalar + " t = (x + 4.0) / 8.0;\n";
           code += "    t = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);\n";
-          code += "    " + scalar_type + " result = mix(smoothstart(t), smoothstop(t), t);\n";
+          code += "    " + scalar + " result = mix(smoothstart(t), smoothstop(t), t);\n";
           code += "    return result * 2.0 - 1.0;\n";
           code += "}\n\n";
-          activationFuncName = "smoothstep_";
+          actFuncName = "smoothstep_";
           break;
         case "cos":
-          activationFuncName = "cos";
+          actFuncName = "cos";
           break;
         case "gelu":
           code += "// GELU activation function approximation\n";
-          code += scalar_type + " gelu(" + scalar_type + " x) { return 0.5 * x * (1.0 + tanh(sqrt(2.0 / 3.141593) * (x + 0.044715 * x * x * x))); }\n\n";
-          activationFuncName = "gelu";
+          code += scalar + " gelu(" + scalar + " x) { return 0.5 * x * (1.0 + tanh(sqrt(2.0 / 3.141593) * (x + 0.044715 * x * x * x))); }\n\n";
+          actFuncName = "gelu";
           break;
         case "elu":
           code += "// ELU activation function (alpha=1)\n";
-          code += scalar_type + " elu(" + scalar_type + " x) { return x >= 0.0 ? x : (exp(x) - 1.0); }\n\n";
-          activationFuncName = "elu";
+          code += scalar + " elu(" + scalar + " x) { return x >= 0.0 ? x : (exp(x) - 1.0); }\n\n";
+          actFuncName = "elu";
           break;
         case "softplus":
           code += "// Softplus activation function\n";
-          code += scalar_type + " softplus(" + scalar_type + " x) { return log(1.0 + exp(x)); }\n\n";
-          activationFuncName = "softplus";
+          code += scalar + " softplus(" + scalar + " x) { return log(1.0 + exp(x)); }\n\n";
+          actFuncName = "softplus";
           break;
         case "linear":
           code += "// Linear activation function (identity)\n";
-          code += scalar_type + " linear(" + scalar_type + " x) { return x; }\n\n";
-          activationFuncName = "linear";
+          code += scalar + " linear(" + scalar + " x) { return x; }\n\n";
+          actFuncName = "linear";
           break;
         case "rayleigh":
           code += "// Rayleigh‑Jeans activation: returns x^2 for x>0, else 0\n";
-          code += scalar_type + " rayleigh(" + scalar_type + " x) { return x > 0.0 ? x * x : 0.0; }\n\n";
-          activationFuncName = "rayleigh";
+          code += scalar + " rayleigh(" + scalar + " x) { return x > 0.0 ? x * x : 0.0; }\n\n";
+          actFuncName = "rayleigh";
           break;
         case "expdecay":
           code += "// Exponential decay activation function\n";
-          code += scalar_type + " expdecay(" + scalar_type + " x) { return exp(-x); }\n\n";
-          activationFuncName = "expdecay";
+          code += scalar + " expdecay(" + scalar + " x) { return exp(-x); }\n\n";
+          actFuncName = "expdecay";
           break;
         case "tanh":
         default:
-          activationFuncName = "tanh";
+          actFuncName = "tanh";
       }
-      
-      code += scalar_type + " f(" + scalar_type + " x) {\n";
-      for (let l = 0; l < nn.numHiddenLayers; l++) {
-        for (let i = 0; i < nn.hiddenSize; i++) {
-          if (l === 0) {
-            code += "    " + scalar_type + " a0_" + i + " = " + activationFuncName + "(x * " + nn.weights[0][i][0].toFixed(6) + " + " + nn.biases[0][i].toFixed(6) + ");\n";
-          } else {
-            let sumParts = "";
-            for (let j = 0; j < nn.hiddenSize; j++) {
-              sumParts += "a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6) + " + ";
+
+      // Check if network is 1D in/out or multi-dimensional.
+      if (nn.inputSize === 1 && nn.outputSize === 1) {
+        // 1D version (as before)
+        code += scalar + " f(" + scalar + " x) {\n";
+        for (let l = 0; l < nn.numHiddenLayers; l++) {
+          for (let i = 0; i < nn.hiddenSize; i++) {
+            if (l === 0) {
+              code += "    " + scalar + " a0_" + i + " = " + actFuncName + "(x * " + nn.weights[0][i][0].toFixed(6) + " + " + nn.biases[0][i].toFixed(6) + ");\n";
+            } else {
+              let sumParts = "";
+              for (let j = 0; j < nn.hiddenSize; j++) {
+                sumParts += "a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6) + " + ";
+              }
+              sumParts = sumParts.slice(0, -3);
+              code += "    " + scalar + " a" + l + "_" + i + " = " + actFuncName + "(" + sumParts + " + " + nn.biases[l][i].toFixed(6) + ");\n";
             }
-            sumParts = sumParts.slice(0, -3);
-            code += "    " + scalar_type + " a" + l + "_" + i + " = " + activationFuncName + "(" + sumParts + " + " + nn.biases[l][i].toFixed(6) + ");\n";
           }
         }
+        let last = nn.numHiddenLayers - 1;
+        code += "    " + scalar + " y = " + nn.outputBias[0].toFixed(6) + ";\n";
+        for (let i = 0; i < nn.hiddenSize; i++) {
+          code += "    y += a" + last + "_" + i + " * " + nn.outputWeights[0][i].toFixed(6) + ";\n";
+        }
+        code += "    return y;\n";
+        code += "}\n";
+      } else {
+        // Multi-dimensional version: function signature: void f(const float *x, float *y)
+        code += "void f(const " + scalar + " *x, " + scalar + " *y) {\n";
+        // Compute each hidden layer's activations
+        for (let l = 0; l < nn.numHiddenLayers; l++) {
+          for (let i = 0; i < nn.hiddenSize; i++) {
+            let line = "    " + scalar + " a" + l + "_" + i + " = ";
+            let terms = [];
+            if (l === 0) {
+              for (let j = 0; j < nn.inputSize; j++) {
+                terms.push("x[" + j + "] * " + nn.weights[0][i][j].toFixed(6));
+              }
+            } else {
+              for (let j = 0; j < nn.hiddenSize; j++) {
+                terms.push("a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6));
+              }
+            }
+            line += actFuncName + "( " + terms.join(" + ") + " + " + (l === 0 ? nn.biases[0][i] : nn.biases[l][i]).toFixed(6) + " );\n";
+            code += line;
+          }
+        }
+        // Compute output layer for each output neuron
+        for (let i = 0; i < nn.outputSize; i++) {
+          let line = "    y[" + i + "] = " + nn.outputBias[i].toFixed(6);
+          let last = nn.numHiddenLayers - 1;
+          for (let j = 0; j < nn.hiddenSize; j++) {
+            line += " + a" + last + "_" + j + " * " + nn.outputWeights[i][j].toFixed(6);
+          }
+          line += ";\n";
+          code += line;
+        }
+        code += "}\n";
       }
-      let lastLayer = nn.numHiddenLayers - 1;
-      code += "    " + scalar_type + " y = " + nn.outputBias.toFixed(6) + ";\n";
-      for (let i = 0; i < nn.hiddenSize; i++) {
-        code += "    y += a" + lastLayer + "_" + i + " * " + nn.outputWeights[i].toFixed(6) + ";\n";
-      }
-      code += "    return y;\n";
-      code += "}\n";
-      
+
       exportArea.value = code;
     }
-    
-    activationSelect.addEventListener("change", function() {
+
+    // Event listeners for controls
+    activationSelect.addEventListener("change", function () {
       nn.setActivationFunction(this.value);
     });
-    
-    targetFunctionSelect.addEventListener("change", function() {
+    targetFunctionSelect.addEventListener("change", function () {
       currentTargetFunction = this.value;
       if (this.value === "custom") {
         customFunctionInput.style.display = "inline-block";
@@ -653,8 +718,7 @@
         customFunctionLabel.style.display = "none";
       }
     });
-    
-    customFunctionInput.addEventListener("change", function() {
+    customFunctionInput.addEventListener("change", function () {
       try {
         let testFunc = new Function('x', 'return ' + this.value);
         testFunc(0);
@@ -663,67 +727,59 @@
         this.value = "Math.sin(x)";
       }
     });
-    
-    hiddenSizeInput.addEventListener("change", function() {
+    inputDimInput.addEventListener("change", function () {
+      const val = parseInt(this.value);
+      if (val > 0) {
+        nn.inputSize = val;
+        nn.initializeWeights();
+      } else {
+        this.value = "1";
+      }
+    });
+    outputDimInput.addEventListener("change", function () {
+      const val = parseInt(this.value);
+      if (val > 0) {
+        nn.outputSize = val;
+        nn.initializeWeights();
+      } else {
+        this.value = "1";
+      }
+    });
+    hiddenSizeInput.addEventListener("change", function () {
       const size = parseInt(this.value);
-      if (size > 0) {
-        nn.setHiddenSize(size);
-      } else {
-        this.value = "1";
-        nn.setHiddenSize(1);
-      }
+      if (size > 0) { nn.setHiddenSize(size); }
+      else { this.value = "1"; nn.setHiddenSize(1); }
     });
-    
-    numLayersInput.addEventListener("change", function() {
-      const numLayers = parseInt(this.value);
-      if (numLayers > 0) {
-        nn.setNumHiddenLayers(numLayers);
-      } else {
-        this.value = "1";
-        nn.setNumHiddenLayers(1);
-      }
+    numLayersInput.addEventListener("change", function () {
+      const num = parseInt(this.value);
+      if (num > 0) { nn.setNumHiddenLayers(num); }
+      else { this.value = "1"; nn.setNumHiddenLayers(1); }
     });
-    
-    learningRateInput.addEventListener("change", function() {
+    learningRateInput.addEventListener("change", function () {
       const rate = parseFloat(this.value);
-      if (rate > 0) {
-        nn.setLearningRate(rate);
-      } else {
-        this.value = "0.01";
-        nn.setLearningRate(0.01);
-      }
+      if (rate > 0) { nn.setLearningRate(rate); }
+      else { this.value = "0.01"; nn.setLearningRate(0.01); }
     });
-    
-    batchSizeInput.addEventListener("change", function() {
+    batchSizeInput.addEventListener("change", function () {
       const size = parseInt(this.value);
-      if (size > 0) {
-        batchSize = size;
-      } else {
-        this.value = "100";
-        batchSize = 100;
-      }
+      if (size > 0) { batchSize = size; }
+      else { this.value = "100"; batchSize = 100; }
     });
-    
-    resetButton.addEventListener("click", function() {
-      nn.initializeWeights();
-    });
-    
-    pauseButton.addEventListener("click", function() {
+    resetButton.addEventListener("click", function () { nn.initializeWeights(); });
+    pauseButton.addEventListener("click", function () {
       isTraining = !isTraining;
       this.textContent = isTraining ? "Pause Training" : "Resume Training";
     });
-    
+
     function animate() {
-      for (let i = 0; i < batchSize; i++) {
-        trainStep();
-      }
+      for (let i = 0; i < batchSize; i++) { trainStep(); }
       draw();
       updateStats();
       updateExport();
       requestAnimationFrame(animate);
     }
-    
     animate();
   </script>
 </body>
+
 </html>
