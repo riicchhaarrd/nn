@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <meta charset="UTF-8">
   <title>Enhanced Neural Network Curve Approximation with C Export</title>
@@ -13,12 +12,10 @@
       gap: 20px;
       margin: 20px;
     }
-
     /* Left panel for the canvas */
     #left-panel {
       /* The canvas retains its 600px width and 400px height */
     }
-
     /* Right panel for stats and export function */
     #right-panel {
       display: flex;
@@ -26,13 +23,11 @@
       gap: 20px;
       width: 300px;
     }
-
     #right-panel2 {
       display: flex;
       flex-direction: column;
       gap: 20px;
     }
-
     /* Styling for stats and export containers */
     #stats,
     #export-container {
@@ -44,30 +39,23 @@
       border: 1px solid #ddd;
       box-sizing: border-box;
     }
-
     #export-container2 {
-      /* width: 100%; */
       font-family: monospace;
-      /* white-space: pre-wrap; */
       background: #f9f9f9;
       padding: 10px;
       border: 1px solid #ddd;
       box-sizing: border-box;
     }
-
     #export {
-      /* width: 100%; */
       height: 430px;
       width: 370px;
       font-family: monospace;
       box-sizing: border-box;
     }
-
     canvas {
       border: 1px solid #333;
       display: block;
     }
-
     /* Styling for control panel */
     #control-panel {
       margin-top: 10px;
@@ -75,7 +63,6 @@
       background: #f0f0f0;
       border: 1px solid #ddd;
     }
-
     #network-controls {
       display: grid;
       grid-template-columns: auto auto;
@@ -83,7 +70,6 @@
       align-items: center;
       margin-bottom: 10px;
     }
-
     #function-controls {
       display: grid;
       grid-template-columns: auto auto;
@@ -93,17 +79,14 @@
       padding-top: 10px;
       border-top: 1px solid #ddd;
     }
-
     select,
     input,
     label {
       font-family: sans-serif;
     }
-
     input[type="number"] {
       width: 60px;
     }
-
     button {
       margin-top: 10px;
       padding: 5px 10px;
@@ -113,13 +96,11 @@
       border-radius: 4px;
       cursor: pointer;
     }
-
     button:hover {
       background: #45a049;
     }
   </style>
 </head>
-
 <body>
   <div id="container">
     <div id="left-panel">
@@ -147,6 +128,12 @@
             <option value="swish">Swish</option>
             <option value="smoothstep">Smoothstep</option>
             <option value="cos">Cosine</option>
+            <option value="gelu">GELU</option>
+            <option value="elu">ELU</option>
+            <option value="softplus">Softplus</option>
+            <option value="linear">Linear</option>
+            <option value="rayleigh">Rayleigh‑Jeans</option>
+            <option value="expdecay">Exponential Decay</option>
           </select>
         </div>
 
@@ -221,7 +208,7 @@
         this.activationFunction = "tanh"; // default activation
         this.initializeWeights();
       }
-
+      
       initializeWeights() {
         this.weights = [];
         this.biases = [];
@@ -247,25 +234,25 @@
         }
         this.outputBias = Math.random() * 2 - 1;
       }
-
+      
       setActivationFunction(funcName) {
         this.activationFunction = funcName;
       }
-
+      
       setLearningRate(rate) {
         this.learningRate = rate;
       }
-
+      
       setHiddenSize(size) {
         this.hiddenSize = size;
         this.initializeWeights();
       }
-
+      
       setNumHiddenLayers(numLayers) {
         this.numHiddenLayers = numLayers;
         this.initializeWeights();
       }
-
+      
       activate(x) {
         switch (this.activationFunction) {
           case "sigmoid":
@@ -280,34 +267,67 @@
             return smoothstepFunc(x);
           case "cos":
             return Math.cos(x);
+          case "gelu":
+            return 0.5 * x * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (x + 0.044715 * Math.pow(x, 3))));
+          case "elu":
+            return x >= 0 ? x : (Math.exp(x) - 1);
+          case "softplus":
+            return Math.log(1 + Math.exp(x));
+          case "linear":
+            return x;
+          case "rayleigh":
+            // Rayleigh‑Jeans style: x^2 for positive x, 0 otherwise.
+            return x > 0 ? x * x : 0;
+          case "expdecay":
+            return Math.exp(-x);
           case "tanh":
           default:
             return Math.tanh(x);
         }
       }
-
+      
       activatePrime(x) {
         switch (this.activationFunction) {
-          case "sigmoid":
-            let sig = 1 / (1 + Math.exp(-x));
-            return sig * (1 - sig);
+          case "sigmoid": {
+              let sig = 1 / (1 + Math.exp(-x));
+              return sig * (1 - sig);
+            }
           case "relu":
             return x > 0 ? 1 : 0;
           case "leakyRelu":
             return x > 0 ? 1 : 0.01;
-          case "swish":
-            let sigm = 1 / (1 + Math.exp(-x));
-            return sigm + x * sigm * (1 - sigm);
+          case "swish": {
+              let sigm = 1 / (1 + Math.exp(-x));
+              return sigm + x * sigm * (1 - sigm);
+            }
           case "smoothstep":
             return smoothstepPrime(x);
           case "cos":
             return -Math.sin(x);
+          case "gelu": {
+              const k = Math.sqrt(2 / Math.PI);
+              const tanhTerm = Math.tanh(k * (x + 0.044715 * Math.pow(x, 3)));
+              const left = 0.5 * (1 + tanhTerm);
+              const sech2 = 1 - tanhTerm * tanhTerm;
+              const right = 0.5 * x * sech2 * k * (1 + 3 * 0.044715 * Math.pow(x, 2));
+              return left + right;
+            }
+          case "elu":
+            return x >= 0 ? 1 : Math.exp(x);
+          case "softplus":
+            return 1 / (1 + Math.exp(-x)); // derivative is sigmoid
+          case "linear":
+            return 1;
+          case "rayleigh":
+            return x > 0 ? 2 * x : 0;
+          case "expdecay":
+            return -Math.exp(-x);
           case "tanh":
           default:
             return 1 - Math.tanh(x) * Math.tanh(x);
         }
       }
-
+      
       forward(x) {
         let input = [x];
         this.a = [];
@@ -334,18 +354,18 @@
         }
         return output;
       }
-
+      
       train(x, target) {
         let output = this.forward(x);
         let error = output - target;
-
+        
         // Update output layer weights and bias
         for (let i = 0; i < this.hiddenSize; i++) {
           let grad = error * this.h[this.numHiddenLayers - 1][i];
           this.outputWeights[i] -= this.learningRate * grad;
         }
         this.outputBias -= this.learningRate * error;
-
+        
         // Backpropagation through hidden layers
         let deltas = [];
         let lastLayer = this.numHiddenLayers - 1;
@@ -354,7 +374,7 @@
           delta.push(error * this.outputWeights[i] * this.activatePrime(this.a[lastLayer][i]));
         }
         deltas[lastLayer] = delta;
-
+        
         for (let l = this.numHiddenLayers - 2; l >= 0; l--) {
           let deltaNext = deltas[l + 1];
           let deltaCurrent = [];
@@ -367,7 +387,7 @@
           }
           deltas[l] = deltaCurrent;
         }
-
+        
         for (let l = 0; l < this.numHiddenLayers; l++) {
           let layerInput = (l === 0) ? [x] : this.h[l - 1];
           for (let i = 0; i < this.hiddenSize; i++) {
@@ -395,7 +415,7 @@
     function transformY(y) {
       return height - ((y - yMin) / (yMax - yMin) * height);
     }
-
+    
     // Get DOM elements for controls
     const hiddenSizeInput = document.getElementById("hidden-size");
     const numLayersInput = document.getElementById("num-layers");
@@ -407,13 +427,13 @@
     const customFunctionLabel = document.getElementById("custom-function-label");
     const resetButton = document.getElementById("reset-network");
     const pauseButton = document.getElementById("pause-training");
-
+    
     // Create the neural network with multi-layer support
     let nn = new NeuralNetwork(1, parseInt(hiddenSizeInput.value), parseInt(numLayersInput.value), 1, parseFloat(learningRateInput.value));
     let isTraining = true;
     let batchSize = parseInt(batchSizeInput.value);
     let currentTargetFunction = "sine";
-
+    
     // Target function selection
     function targetFunction(x) {
       switch (currentTargetFunction) {
@@ -435,7 +455,7 @@
           return Math.sin(x);
       }
     }
-
+    
     // Perform one training step using a random sample
     function trainStep() {
       if (!isTraining) return;
@@ -443,7 +463,7 @@
       let y = targetFunction(x);
       nn.train(x, y);
     }
-
+    
     // Draw the target function and network approximation
     function draw() {
       ctx.clearRect(0, 0, width, height);
@@ -455,7 +475,7 @@
       ctx.moveTo(transformX(0), 0);
       ctx.lineTo(transformX(0), height);
       ctx.stroke();
-
+      
       ctx.strokeStyle = "blue";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -469,7 +489,7 @@
         else { ctx.lineTo(canvasX, canvasY); }
       }
       ctx.stroke();
-
+      
       ctx.strokeStyle = "red";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -483,14 +503,14 @@
         else { ctx.lineTo(canvasX, canvasY); }
       }
       ctx.stroke();
-
+      
       ctx.font = "12px Arial";
       ctx.fillStyle = "blue";
       ctx.fillText("Target Function", 10, 20);
       ctx.fillStyle = "red";
       ctx.fillText("Neural Network Output", 10, 40);
     }
-
+    
     // Update the stats display
     function updateStats() {
       const statsDiv = document.getElementById("stats");
@@ -500,19 +520,19 @@
       statsText += `Learning Rate: ${nn.learningRate}\n`;
       statsText += `Activation: ${nn.activationFunction}\n`;
       statsText += `Target Function: ${currentTargetFunction}\n\n`;
-
+      
       for (let l = 0; l < nn.numHiddenLayers; l++) {
         statsText += `Layer ${l} Weights:\n` +
-          nn.weights[l].map((neuron, i) => `  Neuron ${i}: ${neuron.map(w => w.toFixed(6)).join(", ")}`).join("\n") + "\n\n";
+                     nn.weights[l].map((neuron, i) => `  Neuron ${i}: ${neuron.map(w => w.toFixed(6)).join(", ")}`).join("\n") + "\n\n";
         statsText += `Layer ${l} Biases:\n` +
-          nn.biases[l].map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
+                     nn.biases[l].map((b, i) => `  Neuron ${i}: ${b.toFixed(6)}`).join("\n") + "\n\n";
       }
       statsText += "Output Weights:\n" +
-        nn.outputWeights.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
+                   nn.outputWeights.map((w, i) => `  Neuron ${i}: ${w.toFixed(6)}`).join("\n") + "\n\n";
       statsText += "Output Bias: " + nn.outputBias.toFixed(6);
       statsDiv.textContent = statsText;
     }
-
+    
     // Generate and update the exported C function
     function updateExport() {
       const exportArea = document.getElementById("export");
@@ -558,11 +578,41 @@
         case "cos":
           activationFuncName = "cos";
           break;
+        case "gelu":
+          code += "// GELU activation function approximation\n";
+          code += scalar_type + " gelu(" + scalar_type + " x) { return 0.5 * x * (1.0 + tanh(sqrt(2.0 / 3.141593) * (x + 0.044715 * x * x * x))); }\n\n";
+          activationFuncName = "gelu";
+          break;
+        case "elu":
+          code += "// ELU activation function (alpha=1)\n";
+          code += scalar_type + " elu(" + scalar_type + " x) { return x >= 0.0 ? x : (exp(x) - 1.0); }\n\n";
+          activationFuncName = "elu";
+          break;
+        case "softplus":
+          code += "// Softplus activation function\n";
+          code += scalar_type + " softplus(" + scalar_type + " x) { return log(1.0 + exp(x)); }\n\n";
+          activationFuncName = "softplus";
+          break;
+        case "linear":
+          code += "// Linear activation function (identity)\n";
+          code += scalar_type + " linear(" + scalar_type + " x) { return x; }\n\n";
+          activationFuncName = "linear";
+          break;
+        case "rayleigh":
+          code += "// Rayleigh‑Jeans activation: returns x^2 for x>0, else 0\n";
+          code += scalar_type + " rayleigh(" + scalar_type + " x) { return x > 0.0 ? x * x : 0.0; }\n\n";
+          activationFuncName = "rayleigh";
+          break;
+        case "expdecay":
+          code += "// Exponential decay activation function\n";
+          code += scalar_type + " expdecay(" + scalar_type + " x) { return exp(-x); }\n\n";
+          activationFuncName = "expdecay";
+          break;
         case "tanh":
         default:
           activationFuncName = "tanh";
       }
-
+      
       code += scalar_type + " f(" + scalar_type + " x) {\n";
       for (let l = 0; l < nn.numHiddenLayers; l++) {
         for (let i = 0; i < nn.hiddenSize; i++) {
@@ -585,15 +635,15 @@
       }
       code += "    return y;\n";
       code += "}\n";
-
+      
       exportArea.value = code;
     }
-
-    activationSelect.addEventListener("change", function () {
+    
+    activationSelect.addEventListener("change", function() {
       nn.setActivationFunction(this.value);
     });
-
-    targetFunctionSelect.addEventListener("change", function () {
+    
+    targetFunctionSelect.addEventListener("change", function() {
       currentTargetFunction = this.value;
       if (this.value === "custom") {
         customFunctionInput.style.display = "inline-block";
@@ -603,8 +653,8 @@
         customFunctionLabel.style.display = "none";
       }
     });
-
-    customFunctionInput.addEventListener("change", function () {
+    
+    customFunctionInput.addEventListener("change", function() {
       try {
         let testFunc = new Function('x', 'return ' + this.value);
         testFunc(0);
@@ -613,8 +663,8 @@
         this.value = "Math.sin(x)";
       }
     });
-
-    hiddenSizeInput.addEventListener("change", function () {
+    
+    hiddenSizeInput.addEventListener("change", function() {
       const size = parseInt(this.value);
       if (size > 0) {
         nn.setHiddenSize(size);
@@ -623,8 +673,8 @@
         nn.setHiddenSize(1);
       }
     });
-
-    numLayersInput.addEventListener("change", function () {
+    
+    numLayersInput.addEventListener("change", function() {
       const numLayers = parseInt(this.value);
       if (numLayers > 0) {
         nn.setNumHiddenLayers(numLayers);
@@ -633,8 +683,8 @@
         nn.setNumHiddenLayers(1);
       }
     });
-
-    learningRateInput.addEventListener("change", function () {
+    
+    learningRateInput.addEventListener("change", function() {
       const rate = parseFloat(this.value);
       if (rate > 0) {
         nn.setLearningRate(rate);
@@ -643,8 +693,8 @@
         nn.setLearningRate(0.01);
       }
     });
-
-    batchSizeInput.addEventListener("change", function () {
+    
+    batchSizeInput.addEventListener("change", function() {
       const size = parseInt(this.value);
       if (size > 0) {
         batchSize = size;
@@ -653,16 +703,16 @@
         batchSize = 100;
       }
     });
-
-    resetButton.addEventListener("click", function () {
+    
+    resetButton.addEventListener("click", function() {
       nn.initializeWeights();
     });
-
-    pauseButton.addEventListener("click", function () {
+    
+    pauseButton.addEventListener("click", function() {
       isTraining = !isTraining;
       this.textContent = isTraining ? "Pause Training" : "Resume Training";
     });
-
+    
     function animate() {
       for (let i = 0; i < batchSize; i++) {
         trainStep();
@@ -672,9 +722,8 @@
       updateExport();
       requestAnimationFrame(animate);
     }
-
+    
     animate();
   </script>
 </body>
-
 </html>
