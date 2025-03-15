@@ -352,14 +352,14 @@
     // Default dynamic layer configuration (array of objects)
     let layerConfigs = [
       // or use sin/cos as default
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" },
-      { neurons: 8, norm: "none", dropout: 0.0, activation: "relu" }
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "leakyRelu" },
+      { neurons: 8, norm: "none", dropout: 0.0, activation: "sigmoid" }
     ];
 
     // ---------- Neural Network Class ----------
@@ -743,7 +743,8 @@
       } else {
         lr = parseFloat(fixedLRInput.value);
       }
-      if (lr < 0.00001) return false;
+      if (lr <= 0.0) return false;
+      // if (lr < 0.00001) return false;
       nn.learningRate = lr;
       let sample = sampleImagePoint();
       let x = [sample.x, sample.y];
@@ -824,7 +825,59 @@
       const exportArea = document.getElementById("export");
       let code = "";
       let scalar = "float";
-      let actFuncName = "A";
+      // Map activation functions to letters A, B, C, etc.
+      const activationLetters = {};
+      let currentLetterIndex = 0;
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+      // Assign unique letters to each unique activation function
+      function getActivationLetter(activation) {
+        if (!activationLetters[activation]) {
+          activationLetters[activation] = alphabet[currentLetterIndex++];
+        }
+        return activationLetters[activation];
+      }
+
+      // Generate macro definitions
+      code += "#define PI (3.14159265359)\n";
+      const activationMacros = {
+        // "cos": "#define {letter}(x) cosf(x)",
+        // "tanh": "#define {letter}(x) tanhf(x)",
+        // "sigmoid": "#define {letter}(x) (1.0f / (1.0f + expf(-(x))))",
+        // "relu": "#define {letter}(x) ((x) > 0 ? (x) : 0)",
+        // "leakyRelu": "#define {letter}(x) ((x) > 0 ? (x) : 0.01f * (x))",
+        // "swish": "#define {letter}(x) ((x) / (1.0f + expf(-(x))))",
+        // "smoothstep": "#define {letter}(x) ({scalar} t = ((x) + 4.0f) / 8.0f; t = (t < 0 ? 0 : (t > 1 ? 1 : t)); t * t * (3.0f - 2.0f * t) * 2.0f - 1.0f)",
+        // "sin": "#define {letter}(x) sinf(x)",
+        // "gelu": "#define {letter}(x) (0.5f * (x) * (1.0f + tanhf(0.79788456f * ((x) + 0.044715f * (x) * (x) * (x)))))",
+        // "elu": "#define {letter}(x) ((x) >= 0 ? (x) : (expf((x)) - 1.0f))",
+        // "softplus": "#define {letter}(x) logf(1.0f + expf((x)))",
+        // "linear": "#define {letter}(x) (x)"
+        "cos": "float {letter}(float x) { return cosf(x); }",
+        "tanh": "float {letter}(float x) { return tanhf(x); }",
+        "sigmoid": "float {letter}(float x) { return (1.0 / (1.0 + exp(-(x)))); }",
+        "relu": "float {letter}(float x) { return ((x) > 0. ? (x) : 0.); }",
+        "leakyRelu": "float {letter}(float x) { return ((x) > 0. ? (x) : 0.01 * (x)); }",
+        "swish": "float {letter}(float x) { return ((x) / (1.0 + exp(-(x)))); }",
+        "smoothstep": "float {letter}(float x) { {scalar} t = ((x) + 4.0) / 8.0; t = (t < 0. ? 0. : (t > 1. ? 1. : t)); return t * t * (3.0 - 2.0 * t) * 2.0 - 1.0; }",
+        "sin": "float {letter}(float x) { return sinf(x); }",
+        "gelu": "float {letter}(float x) { return (0.5 * (x) * (1.0 + tanh(0.79788456 * ((x) + 0.044715 * (x) * (x) * (x))))); }",
+        "elu": "float {letter}(float x) { return ((x) >= 0. ? (x) : (exp((x)) - 1.0)); }",
+        "softplus": "float {letter}(float x) { return log(1.0 + exp((x))); }",
+        "linear": "float {letter}(float x) { return (x); }"
+      };
+
+      // Add macros for used activations (including input and output activations)
+      const usedActivations = new Set([nn.inputActivation, nn.outputActivation, ...nn.hiddenActivations]);
+      usedActivations.forEach(activation => {
+        if (activationMacros[activation]) {
+          const letter = getActivationLetter(activation);
+          code += activationMacros[activation].replace("{letter}", letter).replace("{scalar}", scalar) + "\n";
+        }
+      });
+      // code += "#define Q(x) (((x) / 255.0f) * 2.0f - 1.0f)\n\n";
+      code += "float Q(int x) { return (((float(x)) / 255.0) * 2.0 - 1.0); }\n\n";
+
       function quantize8(w) { return Math.round(((w + 1) / 2) * 255); }
       function serialize_weight(x) { return quantize8(x); }
       let retType = (nn.outputSize === 1) ? scalar : "vec" + nn.outputSize;
@@ -832,6 +885,7 @@
       if (nn.inputSize === 1) { funcSig = retType + " f(" + scalar + " x) {\n"; }
       else { funcSig = retType + " f(vec" + nn.inputSize + " x) {\n"; }
       code += funcSig;
+
       const comps = [".x", ".y", ".z", ".w"];
       const tempVars = [
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', /*'x',*/ 'y', 'z',
@@ -857,19 +911,23 @@
       for (let i = 0; i < nn.outputSize; i++) {
         outputVars[i] = tempVars[tempIndex++];
       }
+
+      // Process hidden layers
       for (let l = 0; l < nn.numHiddenLayers; l++) {
+        const actLetter = getActivationLetter(nn.hiddenActivations[l]);
         for (let i = 0; i < nn.hiddenLayerSizes[l]; i++) {
           let line = "";
           if (l === 0) {
+            const inputActLetter = getActivationLetter(nn.inputActivation);
             if (nn.inputSize === 1) {
-              line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actFuncName +
-                "( x * Q(" + serialize_weight(nn.weights[0][i][0]) + ") + " + nn.biases[0][i].toFixed(6) + " );\n";
+              line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actLetter +
+                "( " + inputActLetter + "(x) * Q(" + serialize_weight(nn.weights[0][i][0]) + ") + " + nn.biases[0][i].toFixed(6) + " );\n";
             } else {
               let terms = [];
               for (let j = 0; j < nn.inputSize; j++) {
-                terms.push("x" + comps[j] + " * Q(" + serialize_weight(nn.weights[0][i][j]) + ")");
+                terms.push(inputActLetter + "(x" + comps[j] + ") * Q(" + serialize_weight(nn.weights[0][i][j]) + ")");
               }
-              line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actFuncName +
+              line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actLetter +
                 "( " + terms.join(" + ") + " + " + nn.biases[0][i].toFixed(6) + " );\n";
             }
           } else {
@@ -877,12 +935,15 @@
             for (let j = 0; j < nn.hiddenLayerSizes[l - 1]; j++) {
               terms.push(hiddenVars[l - 1][j] + " * Q(" + serialize_weight(nn.weights[l][i][j]) + ")");
             }
-            line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actFuncName +
+            line = "    " + scalar + " " + hiddenVars[l][i] + " = " + actLetter +
               "( " + terms.join(" + ") + " + " + nn.biases[l][i].toFixed(6) + " );\n";
           }
           code += line;
         }
       }
+
+      // Process output layer
+      const outputActLetter = getActivationLetter(nn.outputActivation);
       for (let i = 0; i < nn.outputSize; i++) {
         let line = "";
         let last = nn.numHiddenLayers - 1;
@@ -890,10 +951,11 @@
         for (let j = 0; j < nn.hiddenLayerSizes[last]; j++) {
           terms.push(hiddenVars[last][j] + " * Q(" + serialize_weight(nn.outputWeights[i][j]) + ")");
         }
-        line = "    " + scalar + " " + outputVars[i] + " = " + nn.outputBias[i].toFixed(6) +
-          " + " + terms.join(" + ") + ";\n";
+        line = "    " + scalar + " " + outputVars[i] + " = " + outputActLetter +
+          "( " + nn.outputBias[i].toFixed(6) + " + " + terms.join(" + ") + " );\n";
         code += line;
       }
+
       if (nn.outputSize === 1) { code += "    return " + outputVars[0] + ";\n"; }
       else { code += "    return " + retType + "(" + outputVars.join(", ") + ");\n"; }
       code += "}\n";
