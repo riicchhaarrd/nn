@@ -51,6 +51,20 @@
       box-sizing: border-box;
     }
 
+    #image-upload-container {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 10px;
+      background: #f0f0f0;
+      border: 1px solid #ddd;
+    }
+
+    #preview-canvas {
+      border: 1px solid #ddd;
+    }
+
     #export {
       height: 430px;
       width: 370px;
@@ -165,6 +179,7 @@
             <option value="square">Square Wave</option>
             <option value="step">Step Function</option>
             <option value="custom">Custom</option>
+            <option value="image">Image</option>
           </select>
 
           <label for="custom-function" id="custom-function-label" style="display:none;">Custom
@@ -174,6 +189,19 @@
 
         <button id="reset-network">Reset Network</button>
         <button id="pause-training">Pause Training</button>
+      </div>
+
+      <!-- Add image upload container -->
+      <div id="image-upload-container">
+        <p>Upload an image to train on:</p>
+        <input type="file" id="image-upload" accept="image/*">
+        <div>
+          <label for="image-scale">Image scale:</label>
+          <input type="range" id="image-scale" min="0.1" max="1.0" step="0.1" value="0.5">
+          <span id="scale-value">0.5</span>
+        </div>
+        <canvas id="preview-canvas" width="200" height="200"></canvas>
+        <button id="use-image">Use This Image</button>
       </div>
     </div>
     <div id="right-panel">
@@ -207,6 +235,71 @@
       if (t <= 0 || t >= 1) return 0;
       let dtResult = 6 * t * (1 - t);
       return dtResult * (1 / 8) * 2;
+    }
+    // Process uploaded image to grayscale values
+    function processImage(img, scale) {
+      const previewCanvas = document.getElementById('preview-canvas');
+      const previewCtx = previewCanvas.getContext('2d');
+
+      // Calculate new dimensions based on scale
+      const scaledWidth = Math.floor(img.width * scale);
+      const scaledHeight = Math.floor(img.height * scale);
+
+      // Resize preview canvas
+      previewCanvas.width = scaledWidth;
+      previewCanvas.height = scaledHeight;
+
+      // Draw and get pixel data
+      previewCtx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+      const imageData = previewCtx.getImageData(0, 0, scaledWidth, scaledHeight);
+      const pixels = imageData.data;
+
+      // Convert to grayscale and normalize to -1 to 1 range
+      // const grayscaleData = [];
+      // for (let i = 0; i < pixels.length; i += 4) {
+      //     // Convert RGB to grayscale using luminosity method
+      //     const gray = 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+      //     // Normalize to -1 to 1 range
+      //     grayscaleData.push((gray / 128.0) - 1.0);
+      // }
+      const data = [];
+      for (let i = 0; i < pixels.length; i += 4) {
+        // Normalize to -1 to 1 range
+        data.push([(pixels[i] / 128.0) - 1.0, (pixels[i + 1] / 128.0) - 1.0, (pixels[i + 2] / 128.0) - 1.0]);
+      }
+
+      return {
+        data: data,
+        width: scaledWidth,
+        height: scaledHeight
+      };
+    }
+
+    // Get image value at x,y coordinates for NN training/prediction
+    function getImageValue(x, y) {
+      // Map the x and y to image coordinate space
+      if (!imageData || !imageData.data) return 0;
+
+      // Convert from neural network input space (-PI to PI) to image space (0 to width/height)
+      const ix = Math.floor(((x - xMin) / (xMax - xMin)) * imageData.width);
+      const iy = Math.floor(((y - yMin) / (yMax - yMin)) * imageData.height);
+
+      // Check bounds
+      if (ix < 0 || ix >= imageData.width || iy < 0 || iy >= imageData.height) return 0;
+
+      // Calculate linear index
+      const index = iy * imageData.width + ix;
+
+      // Return the normalized grayscale value
+      // return imageData.data[index] || 0;
+      return imageData.data[index] || [0, 0, 0];
+    }
+
+    // Sample points from image for training
+    function sampleImagePoint() {
+      const x = Math.random() * (xMax - xMin) + xMin;
+      const y = Math.random() * (yMax - yMin) + yMin;
+      return { x, y, value: getImageValue(x, y) };
     }
 
     // Neural Network supporting multi-dimensional input/output and multiple hidden layers
@@ -304,7 +397,7 @@
             return left + right;
           }
           case "elu": return x >= 0 ? 1 : Math.exp(x);
-          case "softplus": return 1 / (1 + Math.exp(-x)); // derivative is sigmoid
+          case "softplus": return 1 / (1 + Math.exp(-x));
           case "linear": return 1;
           case "rayleigh": return x > 0 ? 2 * x : 0;
           case "expdecay": return -Math.exp(-x);
@@ -313,9 +406,9 @@
         }
       }
 
-      // Forward pass: now x is an array of length inputSize; output is an array of length outputSize.
+      // Forward pass: x is an array of length inputSize; returns an array of length outputSize.
       forward(x) {
-        let current = x.slice();  // copy of input vector
+        let current = x.slice();
         this.a = [];
         this.h = [];
         for (let l = 0; l < this.numHiddenLayers; l++) {
@@ -334,7 +427,6 @@
           this.h.push(hLayer);
           current = hLayer;
         }
-        // Output layer computation
         let output = [];
         for (let i = 0; i < this.outputSize; i++) {
           let sum = this.outputBias[i];
@@ -346,16 +438,16 @@
         return output;
       }
 
-      // Training using one sample: x (array) and target (array) should have lengths inputSize and outputSize, respectively.
+      // Train on one sample: x (array) and target (array) should have proper dimensions.
       train(x, target) {
-        let output = this.forward(x);  // output is an array
+        let output = this.forward(x);
         let errors = [];
         for (let i = 0; i < this.outputSize; i++) {
           errors.push(output[i] - target[i]);
         }
 
-        // Update output layer weights and biases
         let lastLayer = this.numHiddenLayers - 1;
+        // Update output layer weights and biases
         for (let i = 0; i < this.outputSize; i++) {
           for (let j = 0; j < this.hiddenSize; j++) {
             let grad = errors[i] * this.h[lastLayer][j];
@@ -364,9 +456,8 @@
           this.outputBias[i] -= this.learningRate * errors[i];
         }
 
-        // Backpropagation for hidden layers
+        // Backpropagation through hidden layers
         let deltas = [];
-        // Delta for last hidden layer: for each neuron j
         let delta = [];
         for (let j = 0; j < this.hiddenSize; j++) {
           let sum = 0;
@@ -377,7 +468,6 @@
         }
         deltas[lastLayer] = delta;
 
-        // Propagate backwards for remaining hidden layers
         for (let l = this.numHiddenLayers - 2; l >= 0; l--) {
           let deltaNext = deltas[l + 1];
           let deltaCurrent = [];
@@ -391,7 +481,6 @@
           deltas[l] = deltaCurrent;
         }
 
-        // Update hidden layers weights and biases
         for (let l = 0; l < this.numHiddenLayers; l++) {
           let layerInput = (l === 0) ? x : this.h[l - 1];
           for (let i = 0; i < this.hiddenSize; i++) {
@@ -404,11 +493,10 @@
       }
     }
 
-    // Coordinate transforms for canvas drawing (using x ∈ [–π, π] and y ∈ [–1.5, 1.5])
+    // Coordinate transforms for canvas drawing
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
-    const width = canvas.width;
-    const height = canvas.height;
+    const width = canvas.width, height = canvas.height;
     const xMin = -Math.PI, xMax = Math.PI, yMin = -1.5, yMax = 1.5;
     function transformX(x) { return (x - xMin) / (xMax - xMin) * width; }
     function transformY(y) { return height - ((y - yMin) / (yMax - yMin) * height); }
@@ -427,7 +515,7 @@
     const resetButton = document.getElementById("reset-network");
     const pauseButton = document.getElementById("pause-training");
 
-    // Create neural network with vector support
+    // Create network using vector support for input/output dimensions.
     let nn = new NeuralNetwork(
       parseInt(inputDimInput.value),
       parseInt(hiddenSizeInput.value),
@@ -438,55 +526,59 @@
     let isTraining = true;
     let batchSize = parseInt(batchSizeInput.value);
     let currentTargetFunction = "sine";
-
-    // Target function: if output dim is 1, return a number; if >1, return an array.
+    let imageData = null;
+    // Target function: for output dim 1 use a scalar; if >1, cycle through input values.
     function targetFunction(x) {
       switch (currentTargetFunction) {
-        case "polynomial":
-          return x * x * (1 - x);
-        case "square":
-          return Math.sin(x) > 0 ? 1 : -1;
-        case "step":
-          return x > 0 ? 1 : -1;
+        case "polynomial": return x * x * (1 - x);
+        case "square": return Math.sin(x) > 0 ? 1 : -1;
+        case "step": return x > 0 ? 1 : -1;
         case "custom":
-          try {
-            return new Function('x', 'return ' + customFunctionInput.value)(x);
-          } catch (e) {
-            console.error("Error in custom function:", e);
-            return Math.sin(x);
-          }
+          try { return new Function('x', 'return ' + customFunctionInput.value)(x); }
+          catch (e) { console.error("Error in custom function:", e); return Math.sin(x); }
+        case "image":
+          return imageData ? getImageValue(x, 0) : Math.sin(x); // For 1D input case
         case "sine":
-        default:
-          return Math.sin(x);
+        default: return Math.sin(x);
       }
     }
 
-    // Training step: generate a random vector input and compute corresponding target vector.
+    // Training step: generate a random input vector and corresponding target vector.
     function trainStep() {
       if (!isTraining) return;
       let inDim = parseInt(inputDimInput.value);
       let outDim = parseInt(outputDimInput.value);
-      let x = [];
-      for (let i = 0; i < inDim; i++) {
-        x.push(Math.random() * (xMax - xMin) + xMin);
-      }
-      let y;
-      if (outDim === 1) {
+
+
+      let x, y;
+
+      if (currentTargetFunction === "image" && imageData) {
+        // For image training, use 2D input and scalar output
+        if (inDim === 2 && outDim === 3) {
+          const sample = sampleImagePoint();
+          x = [sample.x, sample.y];
+          // y = [sample.value];
+          y = [sample.value[0], sample.value[1], sample.value[2]];
+        } else {
+          // Fallback to standard method if dimensions are wrong
+          x = [Math.random() * (xMax - xMin) + xMin, Math.random() * (yMax - yMin) + yMin];
+          y = [targetFunction(x[0])];
+        }
+      } else if (outDim === 1) {
+        x = Array(inDim).fill().map(() => Math.random() * (xMax - xMin) + xMin);
         y = [targetFunction(x[0])];
       } else {
         y = [];
         for (let i = 0; i < outDim; i++) {
-          // For simplicity, cycle through input elements for target computation.
           y.push(targetFunction(x[i % x.length]));
         }
       }
       nn.train(x, y);
     }
 
-    // Draw target function and network output (only using first input dimension for plotting).
+    // Draw function: uses first input dimension for plotting.
     function draw() {
       ctx.clearRect(0, 0, width, height);
-      // Axes
       ctx.strokeStyle = "black";
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -496,48 +588,116 @@
       ctx.lineTo(transformX(0), height);
       ctx.stroke();
 
-      // Draw target curve (blue) using first input dimension.
-      ctx.strokeStyle = "blue";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      let firstPoint = true;
-      for (let i = 0; i <= width; i++) {
-        let xVal = xMin + (i / width) * (xMax - xMin);
-        let yVal = targetFunction(xVal);
-        let canvasX = transformX(xVal);
-        let canvasY = transformY(yVal);
-        if (firstPoint) { ctx.moveTo(canvasX, canvasY); firstPoint = false; }
-        else { ctx.lineTo(canvasX, canvasY); }
-      }
-      ctx.stroke();
+      if (currentTargetFunction === "image" && imageData) {
+        // // Draw image data as a heatmap
+        // const imgWidth = imageData.width;
+        // const imgHeight = imageData.height;
 
-      // Draw network output (red) using a vector input with first element varying.
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      firstPoint = true;
-      for (let i = 0; i <= width; i++) {
-        let xVal = xMin + (i / width) * (xMax - xMin);
-        // Build input vector: vary first element, others fixed at 0.
-        let inputVec = [xVal];
-        for (let j = 1; j < parseInt(inputDimInput.value); j++) {
-          inputVec.push(0);
+        // // Calculate pixel size
+        // const pixelWidth = width / imgWidth;
+        // const pixelHeight = height / imgHeight;
+
+        // // Draw each pixel
+        // for (let y = 0; y < imgHeight; y++) {
+        //     for (let x = 0; x < imgWidth; x++) {
+        //         const index = y * imgWidth + x;
+        //         const value = imageData.data[index];
+
+        //         // Convert from -1,1 to grayscale (0,255)
+        //         const brightness = Math.floor(((value + 1) / 2) * 255);
+
+        //         ctx.fillStyle = `rgb(${brightness},${brightness},${brightness})`;
+        //         ctx.fillRect(
+        //             x * pixelWidth,
+        //             y * pixelHeight,
+        //             pixelWidth + 0.5,
+        //             pixelHeight + 0.5
+        //         );
+        //     }
+        // }
+      } else {
+        // Draw target function (traditional curve)
+        ctx.strokeStyle = "blue";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let firstPoint = true;
+        for (let i = 0; i <= width; i++) {
+          let xVal = xMin + (i / width) * (xMax - xMin);
+          let yVal = targetFunction(xVal);
+          let canvasX = transformX(xVal);
+          let canvasY = transformY(yVal);
+          if (firstPoint) { ctx.moveTo(canvasX, canvasY); firstPoint = false; }
+          else { ctx.lineTo(canvasX, canvasY); }
         }
-        let outVec = nn.forward(inputVec);
-        // Use first element of network output for plotting.
-        let canvasX = transformX(xVal);
-        let canvasY = transformY(outVec[0]);
-        if (firstPoint) { ctx.moveTo(canvasX, canvasY); firstPoint = false; }
-        else { ctx.lineTo(canvasX, canvasY); }
+        ctx.stroke();
       }
       ctx.stroke();
 
-      // Legend
+      if (parseInt(inputDimInput.value) === 1 || currentTargetFunction !== "image") {
+        // For 1D input, or non-image functions, draw as a curve
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let firstPoint = true;
+        for (let i = 0; i <= width; i++) {
+          let xVal = xMin + (i / width) * (xMax - xMin);
+          let inputVec = [xVal];
+          for (let j = 1; j < parseInt(inputDimInput.value); j++) { inputVec.push(0); }
+          let outVec = nn.forward(inputVec);
+          let canvasX = transformX(xVal);
+          let canvasY = transformY(outVec[0]);
+          if (firstPoint) { ctx.moveTo(canvasX, canvasY); firstPoint = false; }
+          else { ctx.lineTo(canvasX, canvasY); }
+        }
+        ctx.stroke();
+      } else if (parseInt(inputDimInput.value) === 2) {
+        // For 2D input (like image data), draw a heatmap
+        const resolution = 50; // Number of samples in each dimension
+        const cellWidth = width / resolution;
+        const cellHeight = height / resolution;
+
+        for (let iy = 0; iy < resolution; iy++) {
+          for (let ix = 0; ix < resolution; ix++) {
+            const x = xMin + (ix / resolution) * (xMax - xMin);
+            const y = yMin + (iy / resolution) * (yMax - yMin);
+
+            // Get neural network output for this point
+            const output = nn.forward([x, y]);
+            // const output = nn.forward([x, y])[0];
+            // Convert from -1,1 to a red intensity
+            // const redValue = Math.floor(((output + 1) / 2) * 255);
+
+            // Set transparency for overlay visualization
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = `rgba(${output[0] * 255},${output[1] * 255},${output[2] * 255},1)`;
+            // ctx.globalAlpha = 0.5;
+            // ctx.fillStyle = `rgba(255,0,0,${output > 0 ? output : 0})`;
+            ctx.fillRect(
+              ix * cellWidth,
+              iy * cellHeight,
+              cellWidth,
+              cellHeight
+            );
+          }
+        }
+        ctx.globalAlpha = 1.0;
+      }
+
       ctx.font = "12px Arial";
-      ctx.fillStyle = "blue";
-      ctx.fillText("Target Function", 10, 20);
+      if (currentTargetFunction === "image") {
+        ctx.fillStyle = "black";
+        // ctx.fillText("Image Data (Grayscale)", 10, 20);
+      } else {
+        ctx.fillStyle = "blue";
+        // ctx.fillText("Target Function", 10, 20);
+      }
       ctx.fillStyle = "red";
-      ctx.fillText("Neural Network Output", 10, 40);
+      // ctx.fillText("Neural Network Output", 10, 40);
+      if (currentTargetFunction === "image" && imageData) {
+        ctx.fillStyle = "black";
+        // ctx.fillText(`Image Size: ${imageData.width}x${imageData.height}`, 10, 60);
+        // ctx.fillText("Set input dim = 2, output dim = 1 for best results", 10, 80);
+      }
     }
 
     // Update stats display
@@ -565,8 +725,8 @@
       statsDiv.textContent = statsText;
     }
 
-    // Generate C export code: if network is 1D in/out, generate a simple function;
-    // otherwise, generate a function with signature: void f(const float *x, float *y)
+    // Generate and update the exported C function.
+    // This version returns a scalar if output dim==1; otherwise it returns a vector type (vecN) with N equal to output dimension.
     function updateExport() {
       const exportArea = document.getElementById("export");
       let code = "";
@@ -642,72 +802,73 @@
           actFuncName = "tanh";
       }
 
-      // Check if network is 1D in/out or multi-dimensional.
-      if (nn.inputSize === 1 && nn.outputSize === 1) {
-        // 1D version (as before)
-        code += scalar + " f(" + scalar + " x) {\n";
-        for (let l = 0; l < nn.numHiddenLayers; l++) {
-          for (let i = 0; i < nn.hiddenSize; i++) {
-            if (l === 0) {
-              code += "    " + scalar + " a0_" + i + " = " + actFuncName + "(x * " + nn.weights[0][i][0].toFixed(6) + " + " + nn.biases[0][i].toFixed(6) + ");\n";
-            } else {
-              let sumParts = "";
-              for (let j = 0; j < nn.hiddenSize; j++) {
-                sumParts += "a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6) + " + ";
-              }
-              sumParts = sumParts.slice(0, -3);
-              code += "    " + scalar + " a" + l + "_" + i + " = " + actFuncName + "(" + sumParts + " + " + nn.biases[l][i].toFixed(6) + ");\n";
-            }
-          }
-        }
-        let last = nn.numHiddenLayers - 1;
-        code += "    " + scalar + " y = " + nn.outputBias[0].toFixed(6) + ";\n";
-        for (let i = 0; i < nn.hiddenSize; i++) {
-          code += "    y += a" + last + "_" + i + " * " + nn.outputWeights[0][i].toFixed(6) + ";\n";
-        }
-        code += "    return y;\n";
-        code += "}\n";
+      // Determine return type based on output dimension.
+      let retType = (nn.outputSize === 1) ? scalar : "vec" + nn.outputSize;
+
+      // For input, if 1D then use scalar, else keep using pointer notation.
+      let funcSignature = "";
+      if (nn.inputSize === 1) {
+        funcSignature = retType + " f(" + scalar + " x) {\n";
       } else {
-        // Multi-dimensional version: function signature: void f(const float *x, float *y)
-        code += "void f(const " + scalar + " *x, " + scalar + " *y) {\n";
-        // Compute each hidden layer's activations
-        for (let l = 0; l < nn.numHiddenLayers; l++) {
-          for (let i = 0; i < nn.hiddenSize; i++) {
-            let line = "    " + scalar + " a" + l + "_" + i + " = ";
-            let terms = [];
-            if (l === 0) {
-              for (let j = 0; j < nn.inputSize; j++) {
-                terms.push("x[" + j + "] * " + nn.weights[0][i][j].toFixed(6));
-              }
+        // funcSignature = retType + " f(const " + scalar + " *x) {\n";
+        funcSignature = retType + " f(vec" + nn.inputSize + " x) {\n";
+      }
+      code += funcSignature;
+      const components = [".x", ".y", ".z", ".w"];
+      // Generate hidden layer computations
+      for (let l = 0; l < nn.numHiddenLayers; l++) {
+        for (let i = 0; i < nn.hiddenSize; i++) {
+          let line = "";
+          if (l === 0) {
+            if (nn.inputSize === 1) {
+              line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( x * " + nn.weights[0][i][0].toFixed(6) + " + " + nn.biases[0][i].toFixed(6) + " );\n";
             } else {
-              for (let j = 0; j < nn.hiddenSize; j++) {
-                terms.push("a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6));
+              let terms = [];
+              for (let j = 0; j < nn.inputSize; j++) {
+                terms.push("x" + components[j] + " * " + nn.weights[0][i][j].toFixed(6));
               }
+              line = "    " + scalar + " a0_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[0][i].toFixed(6) + " );\n";
             }
-            line += actFuncName + "( " + terms.join(" + ") + " + " + (l === 0 ? nn.biases[0][i] : nn.biases[l][i]).toFixed(6) + " );\n";
-            code += line;
+          } else {
+            let terms = [];
+            for (let j = 0; j < nn.hiddenSize; j++) {
+              terms.push("a" + (l - 1) + "_" + j + " * " + nn.weights[l][i][j].toFixed(6));
+            }
+            line = "    " + scalar + " a" + l + "_" + i + " = " + actFuncName + "( " + terms.join(" + ") + " + " + nn.biases[l][i].toFixed(6) + " );\n";
           }
-        }
-        // Compute output layer for each output neuron
-        for (let i = 0; i < nn.outputSize; i++) {
-          let line = "    y[" + i + "] = " + nn.outputBias[i].toFixed(6);
-          let last = nn.numHiddenLayers - 1;
-          for (let j = 0; j < nn.hiddenSize; j++) {
-            line += " + a" + last + "_" + j + " * " + nn.outputWeights[i][j].toFixed(6);
-          }
-          line += ";\n";
           code += line;
         }
-        code += "}\n";
       }
+
+      // Compute output neurons.
+      for (let i = 0; i < nn.outputSize; i++) {
+        let line = "";
+        let last = nn.numHiddenLayers - 1;
+        let terms = [];
+        for (let j = 0; j < nn.hiddenSize; j++) {
+          terms.push("a" + last + "_" + j + " * " + nn.outputWeights[i][j].toFixed(6));
+        }
+        line = "    " + scalar + " out" + i + " = " + nn.outputBias[i].toFixed(6) + " + " + terms.join(" + ") + ";\n";
+        code += line;
+      }
+
+      // Return the output using vector constructor if output dim > 1.
+      if (nn.outputSize === 1) {
+        code += "    return out0;\n";
+      } else {
+        let outs = [];
+        for (let i = 0; i < nn.outputSize; i++) {
+          outs.push("out" + i);
+        }
+        code += "    return " + retType + "(" + outs.join(", ") + ");\n";
+      }
+      code += "}\n";
 
       exportArea.value = code;
     }
 
-    // Event listeners for controls
-    activationSelect.addEventListener("change", function () {
-      nn.setActivationFunction(this.value);
-    });
+    // Event listeners
+    activationSelect.addEventListener("change", function () { nn.setActivationFunction(this.value); });
     targetFunctionSelect.addEventListener("change", function () {
       currentTargetFunction = this.value;
       if (this.value === "custom") {
@@ -719,31 +880,18 @@
       }
     });
     customFunctionInput.addEventListener("change", function () {
-      try {
-        let testFunc = new Function('x', 'return ' + this.value);
-        testFunc(0);
-      } catch (e) {
-        alert("Invalid function expression. Please check your syntax.");
-        this.value = "Math.sin(x)";
-      }
+      try { new Function('x', 'return ' + this.value)(0); }
+      catch (e) { alert("Invalid function expression. Please check your syntax."); this.value = "Math.sin(x)"; }
     });
     inputDimInput.addEventListener("change", function () {
       const val = parseInt(this.value);
-      if (val > 0) {
-        nn.inputSize = val;
-        nn.initializeWeights();
-      } else {
-        this.value = "1";
-      }
+      if (val > 0) { nn.inputSize = val; nn.initializeWeights(); }
+      else { this.value = "1"; }
     });
     outputDimInput.addEventListener("change", function () {
       const val = parseInt(this.value);
-      if (val > 0) {
-        nn.outputSize = val;
-        nn.initializeWeights();
-      } else {
-        this.value = "1";
-      }
+      if (val > 0) { nn.outputSize = val; nn.initializeWeights(); }
+      else { this.value = "1"; }
     });
     hiddenSizeInput.addEventListener("change", function () {
       const size = parseInt(this.value);
@@ -769,6 +917,83 @@
     pauseButton.addEventListener("click", function () {
       isTraining = !isTraining;
       this.textContent = isTraining ? "Pause Training" : "Resume Training";
+    });
+    const imageUploadContainer = document.getElementById('image-upload-container');
+    const imageUploadInput = document.getElementById('image-upload');
+    const imageScaleInput = document.getElementById('image-scale');
+    const scaleValueSpan = document.getElementById('scale-value');
+    const useImageButton = document.getElementById('use-image');
+
+    // Update the scale value display when slider changes
+    imageScaleInput.addEventListener('input', () => {
+      scaleValueSpan.textContent = imageScaleInput.value;
+
+      // If we already have an image loaded, update the preview
+      if (imageUploadInput.files && imageUploadInput.files[0]) {
+        processSelectedImage();
+      }
+    });
+
+    // Handle image upload change
+    imageUploadInput.addEventListener('change', processSelectedImage);
+
+    function processSelectedImage() {
+      const file = imageUploadInput.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const img = new Image();
+        img.onload = function () {
+          const scale = parseFloat(imageScaleInput.value);
+          const processed = processImage(img, scale);
+
+          // Store but don't activate until "Use This Image" is clicked
+          window.tempImageData = processed;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Use the image when the button is clicked
+    useImageButton.addEventListener('click', () => {
+      if (window.tempImageData) {
+        imageData = window.tempImageData;
+
+        // Set appropriate dimensions for image data
+        inputDimInput.value = "2";
+        nn.inputSize = 2;
+
+        outputDimInput.value = "3";
+        nn.outputSize = 3;
+
+        // Re-initialize the network with the new dimensions
+        nn.initializeWeights();
+
+        // Update interface
+        // alert("Neural network dimensions set to 2D input, 1D output for image processing.");
+      } else {
+        alert("Please upload an image first.");
+      }
+    });
+
+    // Show/hide image upload container based on selected function
+    targetFunctionSelect.addEventListener("change", function () {
+      currentTargetFunction = this.value;
+      if (this.value === "custom") {
+        customFunctionInput.style.display = "inline-block";
+        customFunctionLabel.style.display = "inline-block";
+        imageUploadContainer.style.display = "none";
+      } else if (this.value === "image") {
+        customFunctionInput.style.display = "none";
+        customFunctionLabel.style.display = "none";
+        imageUploadContainer.style.display = "flex";
+      } else {
+        customFunctionInput.style.display = "none";
+        customFunctionLabel.style.display = "none";
+        imageUploadContainer.style.display = "none";
+      }
     });
 
     function animate() {
